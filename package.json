@@ -9,11 +9,12 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
+    "aws-sdk": "^2.7.9",
+    "q": "^1.4.1"
   },
   "devDependencies": {
     "jshint": "latest",
     "nodeunit": "^0.9"
   },
-  "scripts": {
-  }
+  "scripts": {}
 }
