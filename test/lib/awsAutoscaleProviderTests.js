@@ -19,21 +19,23 @@ var fsMock = require('fs');
 var awsMock = require('aws-sdk');
 var AwsAutoscaleProvider = require('../../lib/AwsAutoscaleProvider');
 var BigIp = require('f5-cloud-libs').bigIp;
-var provider = new AwsAutoscaleProvider();
+var provider;
 
-var firstRunConf;
+var providerOptions = {
+    s3Bucket: 'foo'
+};
+
 var iidDoc;
 
 var instance1;
 var instance2;
 
+var deletedInstances;
+
 fsMock.readFile = function(filename, cb) {
     var data;
 
     switch (filename) {
-        case "/config/cloud/aws/firstrun.config":
-            data = firstRunConf;
-            break;
         case "/shared/vadc/aws/iid-document":
             data = iidDoc;
             break;
@@ -43,7 +45,6 @@ fsMock.readFile = function(filename, cb) {
 };
 
 fsMock.reset = function() {
-    firstRunConf = undefined;
     iidDoc = undefined;
 };
 
@@ -55,13 +56,13 @@ awsMock.config = {
 
 module.exports = {
     setUp: function(callback) {
+        provider = new AwsAutoscaleProvider();
         fsMock.reset();
         callback();
     },
 
     testInit: {
         setUp: function(callback) {
-            firstRunConf = "";
             iidDoc = "{}";
 
             BigIp.prototype.list = function() {
@@ -74,40 +75,6 @@ module.exports = {
             callback();
         },
 
-        testGetFirstRunConf: function(test) {
-            firstRunConf = "S3_BUCKET=myS3Bucket\nMANAGEMENT_GUI_PORT=myMgmtGuiPort\nADMIN_PASSWORD=myAdminPassword";
-            provider.init()
-                .then(function() {
-                    test.strictEqual(provider.nodeProperties.s3Bucket, 'myS3Bucket');
-                    test.strictEqual(provider.nodeProperties.mgmtPort, 'myMgmtGuiPort');
-                    test.strictEqual(provider.nodeProperties.adminUser, 'admin');
-                    test.strictEqual(provider.nodeProperties.adminPassword, 'myAdminPassword');
-                })
-                .catch(function(err) {
-                    test.ok(false, err.message);
-                })
-                .finally(function() {
-                    test.done();
-                });
-        },
-
-        testgetFirstRunConfWithEqualsSign: function(test) {
-            firstRunConf = "S3_BUCKET=myS3Bucket\nMANAGEMENT_GUI_PORT=myMgmtGuiPort\nADMIN_PASSWORD=myAd=minPassword";
-            provider.init()
-                .then(function() {
-                    test.strictEqual(provider.nodeProperties.s3Bucket, 'myS3Bucket');
-                    test.strictEqual(provider.nodeProperties.mgmtPort, 'myMgmtGuiPort');
-                    test.strictEqual(provider.nodeProperties.adminUser, 'admin');
-                    test.strictEqual(provider.nodeProperties.adminPassword, 'myAd=minPassword');
-                })
-                .catch(function(err) {
-                    test.ok(false, err.message);
-                })
-                .finally(function() {
-                    test.done();
-                });
-        },
-
         testGetIidDoc: function(test) {
             iidDoc = {
                 privateIp: '1.2.3.4',
@@ -115,7 +82,7 @@ module.exports = {
                 region: 'myRegion'
             };
             iidDoc = JSON.stringify(iidDoc);
-            provider.init()
+            provider.init(providerOptions)
                 .then(function() {
                     test.strictEqual(provider.nodeProperties.mgmtIp, '1.2.3.4');
                     test.strictEqual(provider.nodeProperties.privateIp, '1.2.3.4');
@@ -135,7 +102,7 @@ module.exports = {
                 region: 'myRegion'
             };
             iidDoc = JSON.stringify(iidDoc);
-            provider.init()
+            provider.init(providerOptions)
                 .then(function() {
                     test.strictEqual(awsMock.config.configUpdate.region, 'myRegion');
                 })
@@ -150,91 +117,116 @@ module.exports = {
 
     testGetInstances: {
         setUp: function(callback) {
-            provider.nodeProperties.instanceId = 'id1';
 
-            provider.autoscaling.describeAutoScalingGroups = function(params, cb) {
-                var data = {
-                    AutoScalingGroups: [
-                        {
-                            LaunchConfigurationName: 'mainLaunchConfig',
-                            Instances: [
-                                {
-                                    InstanceId: 'id1',
-                                    LaunchConfigurationName: 'id1LaunchConfig'
-                                },
-                                {
-                                    InstanceId: 'id2',
-                                    LaunchConfigurationName: 'id2LaunchConfig'
-                                }
-                            ]
-                        }
-                    ]
-                };
+            provider.providerOptions = providerOptions;
+            provider.launchConfigMap = {};
 
-                cb(null, data);
+            provider.nodeProperties = {
+                instanceId: 'id1',
+                hostname: 'missingHostname1',
+                mgmtIp: '7.8.9.0',
+                privateIp: '10.11.12.13'
+
             };
 
-            provider.s3.listObjectsV2 = function(params, cb) {
-                var data = {
-                    Contents: [
-                        {
-                            Key: 'id1'
-                        },
-                        {
-                            Key: 'id2'
-                        }
-                    ]
-                };
+            provider.autoscaling = {
+                describeAutoScalingGroups: function(params, cb) {
+                    var data = {
+                        AutoScalingGroups: [
+                            {
+                                LaunchConfigurationName: 'mainLaunchConfig',
+                                Instances: [
+                                    {
+                                        InstanceId: 'id1',
+                                        LaunchConfigurationName: 'id1LaunchConfig'
+                                    },
+                                    {
+                                        InstanceId: 'id2',
+                                        LaunchConfigurationName: 'id2LaunchConfig'
+                                    }
+                                ]
+                            }
+                        ]
+                    };
 
-                cb(null, data);
+                    cb(null, data);
+                }
             };
 
-            provider.s3.getObject = function(params, cb) {
-                var data;
-                instance1 = {
-                    isMaster: false,
-                    hostname: 'hostname1',
-                    mgmtIp: '1.2.3.4',
-                    privateIp: '1.2.3.4',
-                    mgmtPort: 1000,
-                    adminUser: 'myAdminUser',
-                    adminPassword: 'myAdminPassword'
-                };
-                instance2 = {
-                    isMaster: false,
-                    hostname: 'hostname2',
-                    mgmtIp: '5..6.7.8',
-                    privateIp: '5.6.7.8',
-                    mgmtPort: 1000,
-                    adminUser: 'myAdminUser',
-                    adminPassword: 'myAdminPassword'
-                };
+            provider.s3 = {
+                listObjectsV2: function(params, cb) {
+                    var data = {
+                        Contents: [
+                            {
+                                Key: 'id1'
+                            },
+                            {
+                                Key: 'id2'
+                            }
+                        ]
+                    };
 
-                switch (params.Key) {
-                    case 'id1':
-                        data = {
-                            Body: instance1
-                        };
-                        break;
-                    case 'id2':
-                        data = {
-                            Body: instance2
-                        };
-                        break;
+                    cb(null, data);
+                },
+
+                getObject: function(params, cb) {
+                    var data;
+                    instance1 = {
+                        isMaster: false,
+                        hostname: 'hostname1',
+                        mgmtIp: '1.2.3.4',
+                        privateIp: '1.2.3.4',
+                        mgmtPort: 1000,
+                        adminUser: 'myAdminUser',
+                        adminPassword: 'myAdminPassword'
+                    };
+                    instance2 = {
+                        isMaster: false,
+                        hostname: 'hostname2',
+                        mgmtIp: '5.6.7.8',
+                        privateIp: '5.6.7.8',
+                        mgmtPort: 1000,
+                        adminUser: 'myAdminUser',
+                        adminPassword: 'myAdminPassword'
+                    };
+
+                    switch (params.Key) {
+                        case 'id1':
+                            data = {
+                                Body: instance1
+                            };
+                            break;
+                        case 'id2':
+                            data = {
+                                Body: instance2
+                            };
+                            break;
+                    }
+
+                    var context = {
+                        request: {
+                            httpRequest: {
+                                path: ' ' + params.Key
+                            }
+                        }
+                    };
+
+                    data.Body = JSON.stringify(data.Body);
+
+                    cb.apply(context, [null, data]);
+                },
+
+                deleteObjects: function(params, cb) {
+
+                    params.Delete.Objects.forEach(function(element) {
+                        deletedInstances.push(element.Key);
+                    });
+                    cb(null, true);
                 }
 
-                var context = {
-                    request: {
-                        httpRequest: {
-                            path: ' ' + params.Key
-                        }
-                    }
-                };
-
-                data.Body = JSON.stringify(data.Body);
-
-                cb.apply(context, [null, data]);
             };
+
+            deletedInstances = [];
 
             callback();
         },
@@ -259,6 +251,98 @@ module.exports = {
                 .then(function(instances) {
                     test.deepEqual(instances.id1, instance1);
                     test.deepEqual(instances.id2, instance2);
+                })
+                .catch(function(err) {
+                    test.ok(false, err.message);
+                })
+                .finally(function() {
+                    test.done();
+                });
+        },
+
+        testInstanceMapMissingInstanceId: function(test) {
+            // If our instance ID is missing, we should recreate it in the instance map
+            provider.autoscaling.describeAutoScalingGroups = function(params, cb) {
+                var data = {
+                    AutoScalingGroups: [
+                        {
+                            LaunchConfigurationName: 'mainLaunchConfig',
+                            Instances: [
+                                {
+                                    InstanceId: 'id2',
+                                    LaunchConfigurationName: 'id2LaunchConfig'
+                                }
+                            ]
+                        }
+                    ]
+                };
+
+                cb(null, data);
+            };
+
+            provider.getInstances()
+                .then(function(instances) {
+                    test.deepEqual(
+                       instances.id1,
+                       {
+                           isMaster: false,
+                           hostname: 'missingHostname1',
+                           mgmtIp: '7.8.9.0',
+                           privateIp: '10.11.12.13'
+                        }
+                    );
+                    test.deepEqual(instances.id2, instance2);
+                })
+                .catch(function(err) {
+                    test.ok(false, err.message);
+                })
+                .finally(function() {
+                    test.done();
+                });
+        },
+
+        testDeleteMissingInstances: function(test) {
+            provider.s3.listObjectsV2 = function(params, cb) {
+                var data = {
+                    Contents: [
+                        {
+                            Key: 'id1'
+                        },
+                        {
+                            Key: 'id2'
+                        },
+                        {
+                            Key: 'id3'
+                        }
+                    ]
+                };
+
+                cb(null, data);
+            };
+
+            provider.autoscaling.describeAutoScalingGroups = function(params, cb) {
+                var data = {
+                    AutoScalingGroups: [
+                        {
+                            LaunchConfigurationName: 'mainLaunchConfig',
+                            Instances: [
+                                {
+                                    InstanceId: 'id2',
+                                    LaunchConfigurationName: 'id2LaunchConfig'
+                                }
+                            ]
+                        }
+                    ]
+                };
+
+                cb(null, data);
+            };
+
+            provider.getInstances()
+                .then(function() {
+                    test.strictEqual(deletedInstances.length, 2);
+                    test.notStrictEqual(deletedInstances.indexOf('id1'), -1);
+                    test.notStrictEqual(deletedInstances.indexOf('id3'), -1);
                 })
                 .catch(function(err) {
                     test.ok(false, err.message);
