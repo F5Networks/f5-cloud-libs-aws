@@ -226,6 +226,12 @@ module.exports = {
 
             };
 
+            provider.ec2 = {
+                describeInstances: function(params, cb) {
+                    cb(null, {});
+                }
+            };
+
             deletedInstances = [];
 
             callback();
@@ -261,7 +267,8 @@ module.exports = {
         },
 
         testInstanceMapMissingInstanceId: function(test) {
-            // If our instance ID is missing, we should recreate it in the instance map
+            // If an instance ID is missing from the db, we should get it from
+            // describe instances
             provider.autoscaling.describeAutoScalingGroups = function(params, cb) {
                 var data = {
                     AutoScalingGroups: [
@@ -269,8 +276,34 @@ module.exports = {
                             LaunchConfigurationName: 'mainLaunchConfig',
                             Instances: [
                                 {
+                                    InstanceId: 'id1',
+                                    LaunchConfigurationName: 'id1LaunchConfig'
+                                },
+                                {
                                     InstanceId: 'id2',
                                     LaunchConfigurationName: 'id2LaunchConfig'
+                                },
+                                {
+                                    InstanceId: 'id3',
+                                    LaunchConfigurationName: 'id3LaunchConfig'
+                                }
+                            ]
+                        }
+                    ]
+                };
+
+                cb(null, data);
+            };
+
+            provider.ec2.describeInstances = function(params, cb) {
+                var data = {
+                    Reservations: [
+                        {
+                            Instances: [
+                                {
+                                    InstanceId: 'id3',
+                                    PrivateIpAddress: '7.8.9.0',
+                                    PrivateDnsName: 'missingHostname3'
                                 }
                             ]
                         }
@@ -283,12 +316,12 @@ module.exports = {
             provider.getInstances()
                 .then(function(instances) {
                     test.deepEqual(
-                       instances.id1,
+                       instances.id3,
                        {
                            isMaster: false,
-                           hostname: 'missingHostname1',
+                           hostname: 'missingHostname3',
                            mgmtIp: '7.8.9.0',
-                           privateIp: '10.11.12.13'
+                           privateIp: '7.8.9.0'
                         }
                     );
                     test.deepEqual(instances.id2, instance2);
@@ -351,5 +384,33 @@ module.exports = {
                     test.done();
                 });
         }
+    },
+
+    testElectMaster: function(test) {
+        var instances = {
+            'id1': {
+                privateIp: '1.2.3.4'
+            },
+            'id2': {
+                privateIp: '1.2.4.4'
+            }
+        };
+
+        provider.launchConfigurationName = 'launchConfig';
+        provider.launchConfigMap = {
+            'id1': 'launchConfig',
+            'id2': 'launchConfig'
+        };
+
+        provider.electMaster(instances)
+            .then(function(electedMasterId) {
+                test.strictEqual(electedMasterId, 'id1');
+            })
+            .catch(function(err) {
+                test.ok(false, err.message);
+            })
+            .finally(function() {
+                test.done();
+            });
     }
 };
