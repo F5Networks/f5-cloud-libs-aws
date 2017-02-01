@@ -15,10 +15,11 @@
  */
 'use strict';
 
-var fsMock = require('fs');
-var awsMock = require('aws-sdk');
-var AwsAutoscaleProvider = require('../../lib/AwsAutoscaleProvider');
-var BigIp = require('f5-cloud-libs').bigIp;
+var q;
+var fsMock;
+var awsMock;
+var AwsAutoscaleProvider;
+var bigIpMock;
 var provider;
 
 var providerOptions = {
@@ -32,32 +33,34 @@ var instance2;
 
 var deletedInstances;
 
-fsMock.readFile = function(filename, cb) {
-    var data;
-
-    switch (filename) {
-        case "/shared/vadc/aws/iid-document":
-            data = iidDoc;
-            break;
-    }
-
-    cb(null, data);
-};
-
-fsMock.reset = function() {
-    iidDoc = undefined;
-};
-
-awsMock.config = {
-    update: function(config) {
-        this.configUpdate = config;
-    }
-};
-
 module.exports = {
     setUp: function(callback) {
-        provider = new AwsAutoscaleProvider();
+        q = require('q');
+        fsMock = require('fs');
+        awsMock = require('aws-sdk');
+        bigIpMock = require('f5-cloud-libs').bigIp;
+        AwsAutoscaleProvider = require('../../lib/AwsAutoscaleProvider');
+
+        provider = new AwsAutoscaleProvider({clOptions: {user: 'foo', password: 'bar'}});
+
+        awsMock.config = {
+            update: function(config) {
+                this.configUpdate = config;
+            },
+        };
+
+        fsMock.reset = function() {
+            iidDoc = undefined;
+        };
+
         fsMock.reset();
+        callback();
+    },
+
+    tearDown: function(callback) {
+        Object.keys(require.cache).forEach(function(key) {
+            delete require.cache[key];
+        });
         callback();
     },
 
@@ -65,13 +68,50 @@ module.exports = {
         setUp: function(callback) {
             iidDoc = "{}";
 
-            BigIp.prototype.list = function() {
+            awsMock.AutoScaling.prototype.describeAutoScalingInstances = function() {
+                return {
+                    promise: function() {
+                        var deferred = q.defer();
+                        deferred.resolve({
+                            AutoScalingInstances: [
+                                {
+                                    AutoScalingGroupName: 'myAutoscalingGroup'
+                                }
+                            ]
+                        });
+                        return deferred.promise;
+                    }
+                };
+            };
+
+            bigIpMock.prototype.list = function() {
                 return {
                     then: function(cb) {
                         cb({hostname: 'myhost'});
                     }
                 };
             };
+
+            bigIpMock.prototype.modify = function() {
+                return {
+                    then: function(cb) {
+                        cb();
+                    }
+                };
+            };
+
+            fsMock.readFile = function(filename, cb) {
+                var data;
+
+                switch (filename) {
+                    case "/shared/vadc/aws/iid-document":
+                        data = iidDoc;
+                        break;
+                }
+
+                cb(null, data);
+            };
+
             callback();
         },
 
@@ -154,23 +194,29 @@ module.exports = {
             };
 
             provider.s3 = {
-                listObjectsV2: function(params, cb) {
-                    var data = {
-                        Contents: [
-                            {
-                                Key: 'id1'
-                            },
-                            {
-                                Key: 'id2'
-                            }
-                        ]
+                listObjectsV2: function() {
+                    return {
+                        promise: function() {
+                            var deferred = q.defer();
+                            var data = {
+                                Contents: [
+                                    {
+                                        Key: 'id1'
+                                    },
+                                    {
+                                        Key: 'id2'
+                                    }
+                                ]
+                            };
+                            deferred.resolve(data);
+                            return deferred.promise;
+                        }
                     };
-
-                    cb(null, data);
                 },
 
-                getObject: function(params, cb) {
+                getObject: function(params) {
                     var data;
+                    var deferred;
                     instance1 = {
                         isMaster: false,
                         hostname: 'hostname1',
@@ -203,27 +249,29 @@ module.exports = {
                             break;
                     }
 
-                    var context = {
-                        request: {
-                            httpRequest: {
-                                path: ' ' + params.Key
-                            }
-                        }
-                    };
-
                     data.Body = JSON.stringify(data.Body);
 
-                    cb.apply(context, [null, data]);
+                    return {
+                        promise: function() {
+                            deferred = q.defer();
+                            deferred.resolve(data);
+                            return deferred.promise;
+                        }
+                    };
                 },
 
-                deleteObjects: function(params, cb) {
+                deleteObjects: function(params) {
 
                     params.Delete.Objects.forEach(function(element) {
                         deletedInstances.push(element.Key);
                     });
-                    cb(null, true);
-                }
 
+                    return {
+                        promise: function() {
+                            return q();
+                        }
+                    };
+                }
             };
 
             provider.ec2 = {
@@ -335,22 +383,27 @@ module.exports = {
         },
 
         testDeleteMissingInstances: function(test) {
-            provider.s3.listObjectsV2 = function(params, cb) {
-                var data = {
-                    Contents: [
-                        {
-                            Key: 'id1'
-                        },
-                        {
-                            Key: 'id2'
-                        },
-                        {
-                            Key: 'id3'
-                        }
-                    ]
+            provider.s3.listObjectsV2 = function() {
+                return {
+                    promise: function() {
+                        var deferred = q.defer();
+                        var data = {
+                            Contents: [
+                                {
+                                    Key: 'id1'
+                                },
+                                {
+                                    Key: 'id2'
+                                },
+                                {
+                                    Key: 'id3'
+                                }
+                            ]
+                        };
+                        deferred.resolve(data);
+                        return deferred.promise;
+                    }
                 };
-
-                cb(null, data);
             };
 
             provider.autoscaling.describeAutoScalingGroups = function(params, cb) {
