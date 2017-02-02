@@ -158,6 +158,7 @@ module.exports = {
     testGetInstances: {
         setUp: function(callback) {
 
+            const INSTANCES_FOLDER = 'instances/';
             provider.providerOptions = providerOptions;
             provider.launchConfigMap = {};
 
@@ -201,10 +202,10 @@ module.exports = {
                             var data = {
                                 Contents: [
                                     {
-                                        Key: 'id1'
+                                        Key: INSTANCES_FOLDER + 'id1'
                                     },
                                     {
-                                        Key: 'id2'
+                                        Key: INSTANCES_FOLDER + 'id2'
                                     }
                                 ]
                             };
@@ -237,12 +238,12 @@ module.exports = {
                     };
 
                     switch (params.Key) {
-                        case 'id1':
+                        case INSTANCES_FOLDER + 'id1':
                             data = {
                                 Body: instance1
                             };
                             break;
-                        case 'id2':
+                        case INSTANCES_FOLDER + 'id2':
                             data = {
                                 Body: instance2
                             };
@@ -383,6 +384,7 @@ module.exports = {
         },
 
         testDeleteMissingInstances: function(test) {
+            const INSTANCES_FOLDER = 'instances/';
             provider.s3.listObjectsV2 = function() {
                 return {
                     promise: function() {
@@ -390,13 +392,13 @@ module.exports = {
                         var data = {
                             Contents: [
                                 {
-                                    Key: 'id1'
+                                    Key: INSTANCES_FOLDER + 'id1'
                                 },
                                 {
-                                    Key: 'id2'
+                                    Key: INSTANCES_FOLDER + 'id2'
                                 },
                                 {
-                                    Key: 'id3'
+                                    Key: INSTANCES_FOLDER + 'id3'
                                 }
                             ]
                         };
@@ -427,8 +429,8 @@ module.exports = {
             provider.getInstances()
                 .then(function() {
                     test.strictEqual(deletedInstances.length, 2);
-                    test.notStrictEqual(deletedInstances.indexOf('id1'), -1);
-                    test.notStrictEqual(deletedInstances.indexOf('id3'), -1);
+                    test.notStrictEqual(deletedInstances.indexOf(INSTANCES_FOLDER + 'id1'), -1);
+                    test.notStrictEqual(deletedInstances.indexOf(INSTANCES_FOLDER + 'id3'), -1);
                 })
                 .catch(function(err) {
                     test.ok(false, err.message);
