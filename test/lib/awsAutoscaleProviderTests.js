@@ -39,7 +39,7 @@ module.exports = {
         fsMock = require('fs');
         awsMock = require('aws-sdk');
         bigIpMock = require('f5-cloud-libs').bigIp;
-        AwsAutoscaleProvider = require('../../lib/AwsAutoscaleProvider');
+        AwsAutoscaleProvider = require('../../lib/awsAutoscaleProvider');
 
         provider = new AwsAutoscaleProvider({clOptions: {user: 'foo', password: 'bar'}});
 
