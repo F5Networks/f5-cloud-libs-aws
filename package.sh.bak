@@ -1,3 +1,4 @@
+#!/bin/bash
 if [[ $1 == '--no-deps' ]]; then
     rm -rf node_modules
     npm install --production
