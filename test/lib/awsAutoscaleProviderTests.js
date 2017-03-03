@@ -20,11 +20,15 @@ var fsMock;
 var awsMock;
 var AwsAutoscaleProvider;
 var bigIpMock;
+var utilMock;
 var provider;
 
 var providerOptions = {
     s3Bucket: 'foo'
 };
+
+var user = 'foo';
+var password = 'bar';
 
 var iidDoc;
 
@@ -39,9 +43,11 @@ module.exports = {
         fsMock = require('fs');
         awsMock = require('aws-sdk');
         bigIpMock = require('f5-cloud-libs').bigIp;
+        utilMock = require('f5-cloud-libs').util;
+
         AwsAutoscaleProvider = require('../../lib/awsAutoscaleProvider');
 
-        provider = new AwsAutoscaleProvider({clOptions: {user: 'foo', password: 'bar'}});
+        provider = new AwsAutoscaleProvider({clOptions: {user: user, password: password}});
 
         awsMock.config = {
             update: function(config) {
@@ -54,6 +60,9 @@ module.exports = {
         };
 
         fsMock.reset();
+
+        utilMock.DEFAULT_RETRY = utilMock.NO_RETRY;
+
         callback();
     },
 
@@ -467,5 +476,64 @@ module.exports = {
             .finally(function() {
                 test.done();
             });
+    },
+
+    testPutMasterCredentials: {
+        setUp: function(callback) {
+            provider.providerOptions = {};
+            callback();
+        },
+
+        testBasic: function(test) {
+            var calledParams;
+
+            provider.s3 = {
+                putObject: function(params) {
+                    calledParams = params;
+                    return {
+                        promise: function() {
+                            return q();
+                        }
+                    };
+                }
+            };
+
+            provider.putMasterCredentials()
+                .then(function() {
+                    var body = JSON.parse(calledParams.Body);
+                    test.strictEqual(body.username, user);
+                    test.strictEqual(body.password, password);
+                })
+                .catch(function(err) {
+                    test.ok(false, err.message);
+                })
+                .finally(function() {
+                    test.done();
+                });
+        },
+
+        testError: function(test) {
+            provider.s3 = {
+                putObject: function() {
+                    return {
+                        promise: function() {
+                            return q.reject(new Error('uh oh'));
+                        }
+                    };
+                }
+            };
+
+            test.expect(1);
+            provider.putMasterCredentials()
+                .then(function() {
+                    test.ok(false, 'should have failed');
+                })
+                .catch(function(err) {
+                    test.notStrictEqual(err.message.indexOf('master credentials'), -1);
+                })
+                .finally(function() {
+                    test.done();
+                });
+        }
     }
 };
