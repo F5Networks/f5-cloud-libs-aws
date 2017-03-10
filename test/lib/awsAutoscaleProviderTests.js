@@ -93,6 +93,14 @@ module.exports = {
                 };
             };
 
+            awsMock.S3.prototype.listObjectsV2 = function() {
+                return {
+                    promise: function() {
+                        return q({KeyCount: 1});
+                    }
+                };
+            };
+
             bigIpMock.prototype.list = function() {
                 return {
                     then: function(cb) {
@@ -161,6 +169,90 @@ module.exports = {
                 .finally(function() {
                     test.done();
                 });
+        },
+
+        testCreateBucket: {
+            setUp: function(callback) {
+                awsMock.S3.prototype.listObjectsV2 = function() {
+                    return {
+                        promise: function() {
+                            return q({KeyCount: 0});
+                        }
+                    };
+                };
+                callback();
+            },
+
+            testCreated: function(test) {
+                var putParams;
+                awsMock.S3.prototype.putObject = function(params) {
+                    putParams = params;
+                    return {
+                        promise: function() {
+                            return q();
+                        }
+                    };
+                };
+
+                test.expect(1);
+                provider.init(providerOptions)
+                    .then(function() {
+                        test.strictEqual(putParams.Key, 'backup/');
+                    })
+                    .catch(function(err) {
+                        test.ok(false, err.message);
+                    })
+                    .finally(function() {
+                        test.done();
+                    });
+            },
+
+            testListObjectsError: function(test) {
+                var errorMessage = 'foobar';
+                awsMock.S3.prototype.listObjectsV2 = function() {
+                    return {
+                        promise: function() {
+                            return q.reject(errorMessage);
+                        }
+                    };
+                };
+
+                test.expect(1);
+                provider.init(providerOptions)
+                    .then(function() {
+                        test.ok(false, 'Should have had list objects error');
+                    })
+                    .catch(function(err) {
+                        test.strictEqual(err, errorMessage);
+                    })
+                    .finally(function() {
+                        test.done();
+                    });
+            },
+
+            testPutObjectError: function(test) {
+                var errorMessage = 'foobar';
+                awsMock.S3.prototype.putObject = function() {
+                    return {
+                        promise: function() {
+                            return q.reject(errorMessage);
+                        }
+                    };                    
+                };
+
+                test.expect(1);
+                provider.init(providerOptions)
+                    .then(function() {
+                        test.ok(false, 'Should have had list objects error');
+                    })
+                    .catch(function(err) {
+                        test.strictEqual(err, errorMessage);
+                    })
+                    .finally(function() {
+                        test.done();
+                    });
+
+            }
         }
     },
 
