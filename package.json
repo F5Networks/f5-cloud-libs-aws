@@ -9,13 +9,13 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "aws-sdk": "^2.7.9",
+    "aws-sdk": "^2.28",
     "q": "^1.4.1"
   },
   "devDependencies": {
-    "f5-cloud-libs": "git+https://github.com/F5Networks/f5-cloud-libs.git#v2.1.0",
+    "f5-cloud-libs": "git+https://github.com/F5Networks/f5-cloud-libs.git",
     "jshint": "latest",
-    "nodeunit": "^0.10"
+    "nodeunit": "^0.11"
   },
   "scripts": {
     "test": "node_modules/nodeunit/bin/nodeunit --reporter eclipse test test/lib",
