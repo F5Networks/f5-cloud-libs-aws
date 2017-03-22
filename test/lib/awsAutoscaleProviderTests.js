@@ -67,7 +67,8 @@ module.exports = {
 
         utilMock.DEFAULT_RETRY = utilMock.NO_RETRY;
         utilMock.SHORT_RETRY = utilMock.NO_RETRY;
-
+        utilMock.MEDIUM_RETRY = utilMock.NO_RETRY;
+        
         callback();
     },
 
