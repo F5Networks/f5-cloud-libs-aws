@@ -37,6 +37,9 @@ var instance2;
 
 var deletedInstances;
 
+// Our tests cause too many event listeners. Turn off the check.
+process.setMaxListeners(0);
+
 module.exports = {
     setUp: function(callback) {
         q = require('q');
@@ -50,8 +53,9 @@ module.exports = {
         provider = new AwsAutoscaleProvider({clOptions: {user: user, password: password}});
 
         awsMock.config = {
+            configUpdate: {},
             update: function(config) {
-                this.configUpdate = config;
+                Object.assign(this.configUpdate,config);
             },
         };
 
@@ -62,6 +66,7 @@ module.exports = {
         fsMock.reset();
 
         utilMock.DEFAULT_RETRY = utilMock.NO_RETRY;
+        utilMock.SHORT_RETRY = utilMock.NO_RETRY;
 
         callback();
     },
@@ -237,7 +242,7 @@ module.exports = {
                         promise: function() {
                             return q.reject(errorMessage);
                         }
-                    };                    
+                    };
                 };
 
                 test.expect(1);
