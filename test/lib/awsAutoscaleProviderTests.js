@@ -68,7 +68,7 @@ module.exports = {
         utilMock.DEFAULT_RETRY = utilMock.NO_RETRY;
         utilMock.SHORT_RETRY = utilMock.NO_RETRY;
         utilMock.MEDIUM_RETRY = utilMock.NO_RETRY;
-        
+
         callback();
     },
 
@@ -383,8 +383,12 @@ module.exports = {
             };
 
             provider.ec2 = {
-                describeInstances: function(params, cb) {
-                    cb(null, {});
+                describeInstances: function() {
+                    return {
+                        promise: function() {
+                            return q({});
+                        }
+                    };
                 }
             };
 
@@ -451,22 +455,27 @@ module.exports = {
                 cb(null, data);
             };
 
-            provider.ec2.describeInstances = function(params, cb) {
-                var data = {
-                    Reservations: [
-                        {
-                            Instances: [
-                                {
-                                    InstanceId: 'id3',
-                                    PrivateIpAddress: '7.8.9.0',
-                                    PrivateDnsName: 'missingHostname3'
-                                }
-                            ]
-                        }
-                    ]
+            provider.ec2.describeInstances = function() {
+                return {
+                    promise: function() {
+                        var deferred = q.defer();
+                        var data =  {
+                            Reservations: [
+                                    {
+                                        Instances: [
+                                            {
+                                                InstanceId: 'id3',
+                                                PrivateIpAddress: '7.8.9.0',
+                                                PrivateDnsName: 'missingHostname3'
+                                            }
+                                        ]
+                                    }
+                                ]
+                            };
+                            deferred.resolve(data);
+                            return deferred.promise;
+                    }
                 };
-
-                cb(null, data);
             };
 
             provider.getInstances()
@@ -541,6 +550,208 @@ module.exports = {
                 })
                 .catch(function(err) {
                     test.ok(false, err.message);
+                })
+                .finally(function() {
+                    test.done();
+                });
+        }
+    },
+
+    testGetNicsByTag: {
+        testBasic: function(test) {
+            var myTag = {
+                key: 'foo',
+                value: 'bar'
+            };
+            var passedParams;
+
+            provider.ec2 = {
+                describeNetworkInterfaces: function(params) {
+                    passedParams = params;
+                    return {
+                        promise: function() {
+                            return q({
+                                NetworkInterfaces: [
+                                    {
+                                        NetworkInterfaceId: '1',
+                                        PrivateIpAddress: '1.2.3.4'
+                                    },
+                                    {
+                                        NetworkInterfaceId: '2',
+                                        PrivateIpAddress: '2.3.4.5',
+                                        Association: {
+                                            PublicIp: '3.4.5.6'
+                                        }
+                                    }
+                                ]
+                            });
+                        }
+                    };
+                }
+            };
+
+            test.expect(6);
+            provider.getNicsByTag(myTag)
+                .then(function(response) {
+                    test.strictEqual(passedParams.Filters[0].Name, 'tag:' + myTag.key);
+                    test.strictEqual(response[0].id, '1');
+                    test.strictEqual(response[0].ip.private, '1.2.3.4');
+                    test.strictEqual(response[1].id, '2');
+                    test.strictEqual(response[1].ip.private, '2.3.4.5');
+                    test.strictEqual(response[1].ip.public, '3.4.5.6');
+                })
+                .catch(function(err) {
+                    test.ok(false, err.message);
+                })
+                .finally(function() {
+                    test.done();
+                });
+        },
+
+        testBadTag: function(test) {
+            var myTag = 'foo';
+
+            test.expect(1);
+            provider.getNicsByTag(myTag)
+                .then(function() {
+                    test.ok(false, 'getNicsByTag should have thrown');
+                })
+                .catch(function(err) {
+                    test.notStrictEqual(err.message.indexOf('key and value'), -1);
+                })
+                .finally(function() {
+                    test.done();
+                });
+        },
+
+        testError: function(test) {
+            var myTag = {
+                key: 'foo',
+                value: 'bar'
+            };
+
+            provider.ec2 = {
+                describeNetworkInterfaces: function() {
+                    return {
+                        promise: function() {
+                            return q.reject(new Error('uh oh'));
+                        }
+                    };
+                }
+            };
+
+            test.expect(1);
+            provider.getNicsByTag(myTag)
+                .then(function() {
+                    test.ok(false, 'getNicsByTag should have thrown');
+                })
+                .catch(function(err) {
+                    test.strictEqual(err.message, 'uh oh');
+                })
+                .finally(function() {
+                    test.done();
+                });
+        }
+    },
+
+    testGetVmsByTag: {
+        testBasic: function(test) {
+            var myTag = {
+                key: 'foo',
+                value: 'bar'
+            };
+            var passedParams;
+
+            provider.ec2 = {
+                describeInstances: function(params) {
+                    passedParams = params;
+                    return {
+                        promise: function() {
+                            return q({
+                                Reservations: [
+                                    {
+                                        Instances: [
+                                            {
+                                                InstanceId: '1',
+                                                State: {
+                                                    Name: 'running'
+                                                },
+                                                PrivateIpAddress: '1.2.3.4'
+                                            },
+                                            {
+                                                InstanceId: '2',
+                                                State: {
+                                                    Name: 'running'
+                                                },
+                                                PrivateIpAddress: '2.3.4.5',
+                                                PublicIpAddress: '3.4.5.6'
+                                            }
+                                        ]
+                                    }
+                                ]
+                            });
+                        }
+                    };
+                }
+            };
+
+            test.expect(6);
+            provider.getVmsByTag(myTag)
+                .then(function(response) {
+                    test.strictEqual(passedParams.Filters[0].Name, 'tag:' + myTag.key);
+                    test.strictEqual(response[0].id, '1');
+                    test.strictEqual(response[0].ip.private, '1.2.3.4');
+                    test.strictEqual(response[1].id, '2');
+                    test.strictEqual(response[1].ip.private, '2.3.4.5');
+                    test.strictEqual(response[1].ip.public, '3.4.5.6');
+                })
+                .catch(function(err) {
+                    test.ok(false, err.message);
+                })
+                .finally(function() {
+                    test.done();
+                });
+        },
+
+        testBadTag: function(test) {
+            var myTag = 'foo';
+
+            test.expect(1);
+            provider.getVmsByTag(myTag)
+                .then(function() {
+                    test.ok(false, 'getVmsByTag should have thrown');
+                })
+                .catch(function(err) {
+                    test.notStrictEqual(err.message.indexOf('key and value'), -1);
+                })
+                .finally(function() {
+                    test.done();
+                });
+        },
+
+        testError: function(test) {
+            var myTag = {
+                key: 'foo',
+                value: 'bar'
+            };
+
+            provider.ec2 = {
+                describeInstances: function() {
+                    return {
+                        promise: function() {
+                            return q.reject(new Error('uh oh'));
+                        }
+                    };
+                }
+            };
+
+            test.expect(1);
+            provider.getVmsByTag(myTag)
+                .then(function() {
+                    test.ok(false, 'getVmsByTag should have thrown');
+                })
+                .catch(function(err) {
+                    test.strictEqual(err.message, 'uh oh');
                 })
                 .finally(function() {
                     test.done();
