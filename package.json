@@ -13,7 +13,7 @@
     "q": "^1.4.1"
   },
   "devDependencies": {
-    "f5-cloud-libs": "git+https://github.com/F5Networks/f5-cloud-libs.git",
+    "f5-cloud-libs": "git+https://github.com/F5Networks/f5-cloud-libs.git#develop",
     "jshint": "latest",
     "nodeunit": "^0.11"
   },
