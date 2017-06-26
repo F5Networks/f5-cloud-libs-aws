@@ -37,6 +37,8 @@ var instance2;
 
 var deletedInstances;
 
+var getObjectParams;
+
 // Our tests cause too many event listeners. Turn off the check.
 process.setMaxListeners(0);
 
@@ -259,6 +261,87 @@ module.exports = {
                     });
 
             }
+        }
+    },
+
+    testGetDataFromUri: {
+        setUp: function(callback) {
+            provider.s3 = {
+                getObject: function(params) {
+                    getObjectParams = params;
+
+                    return {
+                        promise: function() {
+                            var deferred = q.defer();
+                            deferred.resolve({Body: 'bucket data'});
+                            return deferred.promise;
+                        }
+                    };
+                }
+            };
+
+            getObjectParams = undefined;
+            callback();
+        },
+
+        testBasic: function(test) {
+            test.expect(3);
+            provider.getDataFromUri('arn:aws:s3:::myBucket/myKey')
+                .then(function(data) {
+                    test.strictEqual(getObjectParams.Bucket, 'myBucket');
+                    test.strictEqual(getObjectParams.Key, 'myKey');
+                    test.strictEqual(data, 'bucket data');
+                })
+                .catch(function(err) {
+                    test.ok(false, err);
+                })
+                .finally(function() {
+                    test.done();
+                });
+        },
+
+        testComplexKey: function(test) {
+            test.expect(3);
+            provider.getDataFromUri('arn:aws:s3:::myBucket/myFolder/myKey')
+                .then(function(data) {
+                    test.strictEqual(getObjectParams.Bucket, 'myBucket');
+                    test.strictEqual(getObjectParams.Key, 'myFolder/myKey');
+                    test.strictEqual(data, 'bucket data');
+                })
+                .catch(function(err) {
+                    test.ok(false, err);
+                })
+                .finally(function() {
+                    test.done();
+                });
+        },
+
+        testInvalidUri: function(test) {
+            test.expect(1);
+            provider.getDataFromUri('https://aws.s3.com/myBucket/myKey')
+                .then(function() {
+                    test.ok(false, 'Should have thrown invalid URI');
+                })
+                .catch(function(err) {
+                    test.notStrictEqual(err.message.indexOf('Invalid URI'), -1);
+                })
+                .finally(function() {
+                    test.done();
+                });
+        },
+
+        testInvalidArn: function(test) {
+            test.expect(1);
+            provider.getDataFromUri('arn:aws:s3:::foo/')
+                .then(function() {
+                    test.ok(false, 'Should have thrown invalid ARN');
+                })
+                .catch(function(err) {
+                    test.notStrictEqual(err.message.indexOf('Invalid ARN'), -1);
+                })
+                .finally(function() {
+                    test.done();
+                });
         }
     },
 
