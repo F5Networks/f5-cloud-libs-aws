@@ -1,6 +1,6 @@
 ##############################################################################
 #
-# Copyright (C) 2012-2014, F5 Networks, Inc. All rights reserved.
+# Copyright (C) 2012-2017, F5 Networks, Inc. All rights reserved.
 #
 # reportMetrics.sh
 # Logs - reported to /var/log/aws-metrics.log
@@ -164,6 +164,43 @@ function set_region() {
 }
 
 ############################################################
+# function send_cpu_stat
+# param 1 - name of tmctl table
+# param 2 - name of column
+############################################################
+
+function send_cpu_stat()
+{
+  techo [start]:send_cpu_stat
+  techo [input]$*
+
+  # make sure auto-scale group name is present
+  check_auto_scale_group
+
+  total=0
+  count=0
+  mkfifo tpipe
+  tmsh show sys tmm-info|grep "Last 1 Minute" > tpipe &
+  while read -r var1 var2 var3 var4
+  do
+    total=$(($total+$var4))
+    count=$((count + 1))
+    echo $var4
+  done < tpipe
+
+  stat_result=$((total / count))
+  echo "Number of TMMs: $count"
+  echo "percent: $stat_result"
+
+  f5-rest-node /config/cloud/aws/node_modules/f5-cloud-libs/node_modules/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $2 --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $stat_result --region $EC2_REGION
+  #mon-put-data --metric-name $2 --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues --value $stat_result --region $EC2_REGION
+
+  f5-rest-node /config/cloud/aws/node_modules/f5-cloud-libs/node_modules/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $2 --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $stat_result --dimensions "instance-id=$inst_id" --region $EC2_REGION
+  #mon-put-data --metric-name $2 --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues --value $stat_result --dimensions "instance-id=$inst_id" --region $EC2_REGION
+  techo [end]:send_cpu_stat
+}
+
+############################################################
 # function send_stat
 # param 1 - name of tmctl table
 # param 2 - name of column
@@ -205,7 +242,7 @@ function send_stat_delta()
 
    get_stat_delta $1 $2
 
-   f5-rest-node /config/cloud/aws/node_modules/f5-cloud-libs/node_modules/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $3-per-sec --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $stat_result_delta --region $EC2_REGION 
+   f5-rest-node /config/cloud/aws/node_modules/f5-cloud-libs/node_modules/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $3-per-sec --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $stat_result_delta --region $EC2_REGION
    #mon-put-data --metric-name $3-per-sec --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues --value $stat_result_delta --region $EC2_REGION
 
    f5-rest-node /config/cloud/aws/node_modules/f5-cloud-libs/node_modules/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $3-per-sec --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $stat_result_delta --dimensions "instance-id=$inst_id" --region $EC2_REGION
@@ -226,7 +263,7 @@ function send_throughput()
    # make sure auto-scale group name is present
    check_auto_scale_group
 
-   f5-rest-node /config/cloud/aws/node_modules/f5-cloud-libs/node_modules/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $2-per-sec --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $1 --region $EC2_REGION 
+   f5-rest-node /config/cloud/aws/node_modules/f5-cloud-libs/node_modules/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $2-per-sec --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $1 --region $EC2_REGION
 
    f5-rest-node /config/cloud/aws/node_modules/f5-cloud-libs/node_modules/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $2-per-sec --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $1 --dimensions "instance-id=$inst_id" --region $EC2_REGION
 
@@ -275,6 +312,8 @@ set_region
 
 export inst_id=$(curl http://169.254.169.254/latest/meta-data/instance-id/ 2>/dev/null)
 techo instance_id $inst_id
+
+send_cpu_stat tmm-info tmm-stat
 
 # client_side_traffic.cur_conns
 send_stat tmm_stat client_side_traffic.cur_conns
