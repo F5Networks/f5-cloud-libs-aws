@@ -1,5 +1,5 @@
 /**
- * Copyright 2016 F5 Networks, Inc.
+ * Copyright 2016-2017 F5 Networks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,8 @@ var utilMock;
 var provider;
 
 var providerOptions = {
-    s3Bucket: 'foo'
+    s3Bucket: 'foo',
+    sqsUrl: 'bar'
 };
 
 var user = 'foo';
@@ -32,12 +33,17 @@ var password = 'bar';
 
 var iidDoc;
 
+var instanceId = '1234';
+var instances;
 var instance1;
 var instance2;
 
 var deletedInstances;
 
 var getObjectParams;
+var instanceProtectionParams;
+var putInstanceId;
+var putInstance;
 
 // Our tests cause too many event listeners. Turn off the check.
 process.setMaxListeners(0);
@@ -58,7 +64,7 @@ module.exports = {
             configUpdate: {},
             update: function(config) {
                 Object.assign(this.configUpdate,config);
-            },
+            }
         };
 
         fsMock.reset = function() {
@@ -79,6 +85,12 @@ module.exports = {
             delete require.cache[key];
         });
         callback();
+    },
+
+    testFeatures: function(test) {
+        test.expect(1);
+        test.ok(provider.features.FEATURE_MESSAGING);
+        test.done();
     },
 
     testInit: {
@@ -147,6 +159,8 @@ module.exports = {
                 region: 'myRegion'
             };
             iidDoc = JSON.stringify(iidDoc);
+
+            test.expect(4);
             provider.init(providerOptions)
                 .then(function() {
                     test.strictEqual(provider.nodeProperties.mgmtIp, '1.2.3.4');
@@ -167,6 +181,8 @@ module.exports = {
                 region: 'myRegion'
             };
             iidDoc = JSON.stringify(iidDoc);
+
+            test.expect(1);
             provider.init(providerOptions)
                 .then(function() {
                     test.strictEqual(awsMock.config.configUpdate.region, 'myRegion');
@@ -357,7 +373,6 @@ module.exports = {
                 hostname: 'missingHostname1',
                 mgmtIp: '7.8.9.0',
                 privateIp: '10.11.12.13'
-
             };
 
             provider.autoscaling = {
@@ -396,6 +411,9 @@ module.exports = {
                                     },
                                     {
                                         Key: INSTANCES_FOLDER + 'id2'
+                                    },
+                                    {
+                                        Key: INSTANCES_FOLDER + 'goneMissing'
                                     }
                                 ]
                             };
@@ -415,7 +433,8 @@ module.exports = {
                         privateIp: '1.2.3.4',
                         mgmtPort: 1000,
                         adminUser: 'myAdminUser',
-                        adminPassword: 'myAdminPassword'
+                        adminPassword: 'myAdminPassword',
+                        providerVisible: true
                     };
                     instance2 = {
                         isMaster: false,
@@ -424,7 +443,8 @@ module.exports = {
                         privateIp: '5.6.7.8',
                         mgmtPort: 1000,
                         adminUser: 'myAdminUser',
-                        adminPassword: 'myAdminPassword'
+                        adminPassword: 'myAdminPassword',
+                        providerVisible: true
                     };
 
                     switch (params.Key) {
@@ -440,6 +460,7 @@ module.exports = {
                             break;
                     }
 
+                    data = data || {Body: {}};
                     data.Body = JSON.stringify(data.Body);
 
                     return {
@@ -475,12 +496,17 @@ module.exports = {
                 }
             };
 
+            provider.revokeLicenses = function() {
+                return q();
+            };
+
             deletedInstances = [];
 
             callback();
         },
 
         testLaunchConfigurationMap: function(test) {
+            test.expect(3);
             provider.getInstances()
                 .then(function() {
                     test.strictEqual(provider.launchConfigurationName, 'mainLaunchConfig');
@@ -496,8 +522,11 @@ module.exports = {
         },
 
         testInstanceMap: function(test) {
+            test.expect(2);
             provider.getInstances()
                 .then(function(instances) {
+                    delete instances.id1.lastUpdate;
+                    delete instances.id2.lastUpdate;
                     test.deepEqual(instances.id1, instance1);
                     test.deepEqual(instances.id2, instance2);
                 })
@@ -563,13 +592,16 @@ module.exports = {
 
             provider.getInstances()
                 .then(function(instances) {
+                    delete instances.id2.lastUpdate;
+                    delete instances.id3.lastUpdate;
                     test.deepEqual(
                        instances.id3,
                        {
                            isMaster: false,
                            hostname: 'missingHostname3',
                            mgmtIp: '7.8.9.0',
-                           privateIp: '7.8.9.0'
+                           privateIp: '7.8.9.0',
+                           providerVisible: true
                         }
                     );
                     test.deepEqual(instances.id2, instance2);
@@ -582,54 +614,13 @@ module.exports = {
                 });
         },
 
-        testDeleteMissingInstances: function(test) {
-            const INSTANCES_FOLDER = 'instances/';
-            provider.s3.listObjectsV2 = function() {
-                return {
-                    promise: function() {
-                        var deferred = q.defer();
-                        var data = {
-                            Contents: [
-                                {
-                                    Key: INSTANCES_FOLDER + 'id1'
-                                },
-                                {
-                                    Key: INSTANCES_FOLDER + 'id2'
-                                },
-                                {
-                                    Key: INSTANCES_FOLDER + 'id3'
-                                }
-                            ]
-                        };
-                        deferred.resolve(data);
-                        return deferred.promise;
-                    }
-                };
-            };
-
-            provider.autoscaling.describeAutoScalingGroups = function(params, cb) {
-                var data = {
-                    AutoScalingGroups: [
-                        {
-                            LaunchConfigurationName: 'mainLaunchConfig',
-                            Instances: [
-                                {
-                                    InstanceId: 'id2',
-                                    LaunchConfigurationName: 'id2LaunchConfig'
-                                }
-                            ]
-                        }
-                    ]
-                };
-
-                cb(null, data);
-            };
-
+        testNonMastersDeleted: function(test) {
+            test.expect(3);
             provider.getInstances()
                 .then(function() {
                     test.strictEqual(deletedInstances.length, 2);
-                    test.notStrictEqual(deletedInstances.indexOf(INSTANCES_FOLDER + 'id1'), -1);
-                    test.notStrictEqual(deletedInstances.indexOf(INSTANCES_FOLDER + 'id3'), -1);
+                    test.strictEqual(deletedInstances[0], 'instances/goneMissing');
+                    test.strictEqual(deletedInstances[1], 'public_keys/goneMissing');
                 })
                 .catch(function(err) {
                     test.ok(false, err.message);
@@ -673,12 +664,13 @@ module.exports = {
                 }
             };
 
-            test.expect(6);
+            test.expect(7);
             provider.getNicsByTag(myTag)
                 .then(function(response) {
                     test.strictEqual(passedParams.Filters[0].Name, 'tag:' + myTag.key);
                     test.strictEqual(response[0].id, '1');
                     test.strictEqual(response[0].ip.private, '1.2.3.4');
+                    test.strictEqual(response[0].ip.public, undefined);
                     test.strictEqual(response[1].id, '2');
                     test.strictEqual(response[1].ip.private, '2.3.4.5');
                     test.strictEqual(response[1].ip.public, '3.4.5.6');
@@ -858,6 +850,7 @@ module.exports = {
             'id2': 'launchConfig'
         };
 
+        test.expect(1);
         provider.electMaster(instances)
             .then(function(electedMasterId) {
                 test.strictEqual(electedMasterId, 'id1');
@@ -870,31 +863,50 @@ module.exports = {
             });
     },
 
-    testPutMasterCredentials: {
+    testIsValidMaster: {
         setUp: function(callback) {
-            provider.providerOptions = {};
-            callback();
-        },
+            instance1 = {
+                isMaster: false,
+                hostname: 'hostname1',
+                mgmtIp: '1.2.3.4',
+                privateIp: '1.2.3.4'
+            };
+            instance2 = {
+                isMaster: false,
+                hostname: 'hostname2',
+                mgmtIp: '5.6.7.8',
+                privateIp: '5.6.7.8'
+            };
 
-        testBasic: function(test) {
-            var calledParams;
+            instances = [instance1, instance2];
+
+            provider.nodeProperties = {
+                instanceId: instanceId + 1
+            };
+            provider.launchConfigurationName = 'launchConfig';
+            provider.launchConfigMap = {};
+            provider.launchConfigMap[instanceId] = provider.launchConfigurationName;
 
             provider.s3 = {
-                putObject: function(params) {
-                    calledParams = params;
+                getObject: function() {
                     return {
                         promise: function() {
-                            return q();
+                            return q({});
                         }
                     };
                 }
             };
 
-            provider.putMasterCredentials()
-                .then(function() {
-                    var body = JSON.parse(calledParams.Body);
-                    test.strictEqual(body.username, user);
-                    test.strictEqual(body.password, password);
+            callback();
+        },
+
+        testIsMaster: function(test) {
+            provider.nodeProperties.instanceId = instanceId;
+
+            test.expect(1);
+            provider.isValidMaster(instanceId, instances)
+                .then(function(isValid) {
+                    test.ok(isValid);
                 })
                 .catch(function(err) {
                     test.ok(false, err.message);
@@ -904,24 +916,142 @@ module.exports = {
                 });
         },
 
-        testError: function(test) {
-            provider.s3 = {
-                putObject: function() {
-                    return {
-                        promise: function() {
-                            return q.reject(new Error('uh oh'));
-                        }
-                    };
-                }
+        testNoInstanceInfo: function(test) {
+            provider.s3.getObject = function() {
+                return {
+                    promise: function() {
+                        return q.reject();
+                    }
+                };
             };
 
             test.expect(1);
-            provider.putMasterCredentials()
-                .then(function() {
-                    test.ok(false, 'should have failed');
+            provider.isValidMaster(instanceId, instances)
+                .then(function(isValid) {
+                    test.ok(isValid);
                 })
                 .catch(function(err) {
-                    test.notStrictEqual(err.message.indexOf('master credentials'), -1);
+                    test.ok(false, err.message);
+                })
+                .finally(function() {
+                    test.done();
+                });
+        }
+    },
+
+    testMasterElected: {
+        setUp: function(callback) {
+            provider.nodeProperties = {
+                instanceId: instanceId
+            };
+            instanceProtectionParams = undefined;
+
+            awsMock = {
+                AutoScaling: {
+                    setInstanceProtection: function(params, cb) {
+                        instanceProtectionParams = params;
+                        cb();
+                    }
+                },
+                S3: {
+                    listObjectsV2: function() {
+                        return {
+                            promise: function() {
+                                return q(
+                                    {
+                                        KeyCount: 1,
+                                        Contents: []
+                                    });
+                            }
+                        };
+                    }
+                }
+            };
+
+            provider.autoscaling = awsMock.AutoScaling;
+            provider.s3 = awsMock.S3;
+            provider.providerOptions = {
+                s3Bucket: 'foo'
+            };
+
+            callback();
+        },
+
+        testInstanceProtectionSetWhenMaster: function(test) {
+            test.expect(3);
+            provider.masterElected(instanceId)
+                .then(function() {
+                    test.strictEqual(instanceProtectionParams.InstanceIds.length, 1);
+                    test.strictEqual(instanceProtectionParams.InstanceIds[0], instanceId);
+                    test.ok(instanceProtectionParams.ProtectedFromScaleIn);
+                })
+                .catch(function(err) {
+                    test.ok(false, err.message);
+                })
+                .finally(function() {
+                    test.done();
+                });
+        },
+
+        testInstanceProtectionNotSetWhenNotMaster: function(test) {
+            test.expect(1);
+            provider.masterElected('foo')
+                .then(function() {
+                    test.strictEqual(instanceProtectionParams, undefined);
+                })
+                .catch(function(err) {
+                    test.ok(false, err.message);
+                })
+                .finally(function() {
+                    test.done();
+                });
+
+        },
+
+        testOtherMastersSetToNonMaster: function(test) {
+            awsMock.S3.listObjectsV2 = function() {
+                return {
+                    promise: function() {
+                        return q(
+                            {
+                                KeyCount: 1,
+                                Contents: [
+                                    {
+                                        Key: 'instances/5678',
+                                        isMaster: true
+                                    }
+                                ]
+                            });
+                    }
+                };
+            };
+            awsMock.S3.getObject = function() {
+                    return {
+                        promise: function() {
+                            return q(
+                                {
+                                    Body: JSON.stringify({
+                                        isMaster: true
+                                    })
+                                });
+                        }
+                    };
+            };
+
+            provider.putInstance = function(instanceId, instance) {
+                putInstanceId = instanceId;
+                putInstance = instance;
+                return q();
+            };
+
+            test.expect(2);
+            provider.masterElected(instanceId)
+                .then(function() {
+                    test.strictEqual(putInstanceId, '5678');
+                    test.strictEqual(putInstance.isMaster, false);
+                })
+                .catch(function(err) {
+                    test.ok(false, err.message);
                 })
                 .finally(function() {
                     test.done();
