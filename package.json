@@ -1,24 +1,38 @@
 {
-  "name": "f5-cloud-libs-aws",
+  "name": "@f5devcentral/f5-cloud-libs-aws",
   "version": "1.6.0",
-  "description": "AWS implementation of f5-cloud-libs autoscale code",
+  "description": "AWS implementation of f5-cloud-libs cloud provider code",
+  "keywords": [
+    "f5",
+    "big-ip",
+    "bigip"
+  ],
   "main": "index.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/F5Networks/f5-cloud-libs-aws.git"
+  },
+  "bugs": {
+    "url": "https://github.com/F5Networks/f5-cloud-libs-aws/issues"
   },
   "license": "Apache-2.0",
   "dependencies": {
     "aws-sdk": "^2.28",
     "q": "^1.4.1"
   },
+  "peerDependencies": {
+    "@f5devcentral/f5-cloud-libs": "^3.6.2"
+  },
   "devDependencies": {
-    "f5-cloud-libs": "git+https://github.com/F5Networks/f5-cloud-libs.git#develop",
-    "jshint": "latest",
+    "eslint": "^4.16.0",
+    "eslint-config-airbnb-base": "^12.1.0",
+    "eslint-plugin-import": "^2.8.0",
     "nodeunit": "^0.11"
   },
   "scripts": {
+    "lint": "node node_modules/eslint/bin/eslint lib",
+    "package": "./package.sh",
     "test": "node_modules/nodeunit/bin/nodeunit --reporter eclipse test test/lib",
-    "package": "./package.sh"
+    "version": "./setVersion.sh $npm_package_version && git add ."
   }
 }

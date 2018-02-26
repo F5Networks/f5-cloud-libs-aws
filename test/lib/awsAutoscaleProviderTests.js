@@ -1,5 +1,5 @@
 /**
- * Copyright 2016-2017 F5 Networks, Inc.
+ * Copyright 2016-2018 F5 Networks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,61 +13,68 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 'use strict';
 
-var q;
-var fsMock;
-var awsMock;
-var AwsAutoscaleProvider;
-var bigIpMock;
-var utilMock;
-var provider;
+process.env.NODE_PATH = `${__dirname}/../../../`;
+require('module').Module._initPaths(); // eslint-disable-line no-underscore-dangle
 
-var providerOptions = {
+let q;
+let fsMock;
+let awsMock;
+let AwsAutoscaleProvider;
+let bigIpMock;
+let utilMock;
+let provider;
+
+const providerOptions = {
     s3Bucket: 'foo',
     sqsUrl: 'bar'
 };
 
-var user = 'foo';
-var password = 'bar';
+const user = 'foo';
+const password = 'bar';
+const instanceId = '1234';
 
-var iidDoc;
+let iidDoc;
+let instances;
+let instance1;
+let instance2;
 
-var instanceId = '1234';
-var instances;
-var instance1;
-var instance2;
+let deletedInstances;
 
-var deletedInstances;
+let getObjectParams;
+let instanceProtectionParams;
 
-var getObjectParams;
-var instanceProtectionParams;
-var putInstanceId;
-var putInstance;
+const INSTANCES_FOLDER = 'instances/';
 
 // Our tests cause too many event listeners. Turn off the check.
 process.setMaxListeners(0);
 
 module.exports = {
-    setUp: function(callback) {
+    setUp(callback) {
+        /* eslint-disable global-require */
         q = require('q');
         fsMock = require('fs');
         awsMock = require('aws-sdk');
+        /* eslint-disable import/no-extraneous-dependencies, import/no-unresolved */
         bigIpMock = require('f5-cloud-libs').bigIp;
         utilMock = require('f5-cloud-libs').util;
+        /* eslint-enable import/no-extraneous-dependencies, import/no-unresolved */
 
         AwsAutoscaleProvider = require('../../lib/awsAutoscaleProvider');
+        /* eslint-enable global-require */
 
-        provider = new AwsAutoscaleProvider({clOptions: {user: user, password: password}});
+        provider = new AwsAutoscaleProvider({ clOptions: { user, password } });
 
         awsMock.config = {
             configUpdate: {},
-            update: function(config) {
-                Object.assign(this.configUpdate,config);
+            update(config) {
+                Object.assign(this.configUpdate, config);
             }
         };
 
-        fsMock.reset = function() {
+        fsMock.reset = function reset() {
             iidDoc = undefined;
         };
 
@@ -80,70 +87,73 @@ module.exports = {
         callback();
     },
 
-    tearDown: function(callback) {
-        Object.keys(require.cache).forEach(function(key) {
+    tearDown(callback) {
+        Object.keys(require.cache).forEach((key) => {
             delete require.cache[key];
         });
         callback();
     },
 
-    testFeatures: function(test) {
+    testFeatures(test) {
         test.expect(1);
         test.ok(provider.features.FEATURE_MESSAGING);
         test.done();
     },
 
     testInit: {
-        setUp: function(callback) {
-            iidDoc = "{}";
+        setUp(callback) {
+            iidDoc = '{}';
 
-            awsMock.AutoScaling.prototype.describeAutoScalingInstances = function() {
+            awsMock.AutoScaling.prototype.describeAutoScalingInstances =
+                function describeAutoScalingInstances() {
+                    return {
+                        promise() {
+                            const deferred = q.defer();
+                            deferred.resolve({
+                                AutoScalingInstances: [
+                                    {
+                                        AutoScalingGroupName: 'myAutoscalingGroup'
+                                    }
+                                ]
+                            });
+                            return deferred.promise;
+                        }
+                    };
+                };
+
+            awsMock.S3.prototype.listObjectsV2 = function listObjectsV2() {
                 return {
-                    promise: function() {
-                        var deferred = q.defer();
-                        deferred.resolve({
-                            AutoScalingInstances: [
-                                {
-                                    AutoScalingGroupName: 'myAutoscalingGroup'
-                                }
-                            ]
-                        });
-                        return deferred.promise;
+                    promise() {
+                        return q({ KeyCount: 1 });
                     }
                 };
             };
 
-            awsMock.S3.prototype.listObjectsV2 = function() {
+            bigIpMock.prototype.list = function list() {
                 return {
-                    promise: function() {
-                        return q({KeyCount: 1});
+                    then(cb) {
+                        cb({ hostname: 'myhost' });
                     }
                 };
             };
 
-            bigIpMock.prototype.list = function() {
+            bigIpMock.prototype.modify = function modify() {
                 return {
-                    then: function(cb) {
-                        cb({hostname: 'myhost'});
-                    }
-                };
-            };
-
-            bigIpMock.prototype.modify = function() {
-                return {
-                    then: function(cb) {
+                    then(cb) {
                         cb();
                     }
                 };
             };
 
-            fsMock.readFile = function(filename, cb) {
-                var data;
+            fsMock.readFile = function modify(filename, cb) {
+                let data;
 
                 switch (filename) {
-                    case "/shared/vadc/aws/iid-document":
-                        data = iidDoc;
-                        break;
+                case '/shared/vadc/aws/iid-document':
+                    data = iidDoc;
+                    break;
+                default:
+                    data = undefined;
                 }
 
                 cb(null, data);
@@ -152,7 +162,7 @@ module.exports = {
             callback();
         },
 
-        testGetIidDoc: function(test) {
+        testGetIidDoc(test) {
             iidDoc = {
                 privateIp: '1.2.3.4',
                 instanceId: 'myInstanceId',
@@ -162,21 +172,21 @@ module.exports = {
 
             test.expect(4);
             provider.init(providerOptions)
-                .then(function() {
+                .then(() => {
                     test.strictEqual(provider.nodeProperties.mgmtIp, '1.2.3.4');
                     test.strictEqual(provider.nodeProperties.privateIp, '1.2.3.4');
                     test.strictEqual(provider.nodeProperties.instanceId, 'myInstanceId');
                     test.strictEqual(provider.nodeProperties.region, 'myRegion');
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.ok(false, err.message);
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         },
 
-        testSetRegion: function(test) {
+        testSetRegion(test) {
             iidDoc = {
                 region: 'myRegion'
             };
@@ -184,35 +194,35 @@ module.exports = {
 
             test.expect(1);
             provider.init(providerOptions)
-                .then(function() {
+                .then(() => {
                     test.strictEqual(awsMock.config.configUpdate.region, 'myRegion');
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.ok(false, err.message);
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         },
 
         testCreateBucket: {
-            setUp: function(callback) {
-                awsMock.S3.prototype.listObjectsV2 = function() {
+            setUp(callback) {
+                awsMock.S3.prototype.listObjectsV2 = function listObjectsV2() {
                     return {
-                        promise: function() {
-                            return q({KeyCount: 0});
+                        promise() {
+                            return q({ KeyCount: 0 });
                         }
                     };
                 };
                 callback();
             },
 
-            testCreated: function(test) {
-                var putParams;
-                awsMock.S3.prototype.putObject = function(params) {
+            testCreated(test) {
+                let putParams;
+                awsMock.S3.prototype.putObject = function putObject(params) {
                     putParams = params;
                     return {
-                        promise: function() {
+                        promise() {
                             return q();
                         }
                     };
@@ -220,22 +230,22 @@ module.exports = {
 
                 test.expect(1);
                 provider.init(providerOptions)
-                    .then(function() {
+                    .then(() => {
                         test.strictEqual(putParams.Key, 'backup/');
                     })
-                    .catch(function(err) {
+                    .catch((err) => {
                         test.ok(false, err.message);
                     })
-                    .finally(function() {
+                    .finally(() => {
                         test.done();
                     });
             },
 
-            testListObjectsError: function(test) {
-                var errorMessage = 'foobar';
-                awsMock.S3.prototype.listObjectsV2 = function() {
+            testListObjectsError(test) {
+                const errorMessage = 'foobar';
+                awsMock.S3.prototype.listObjectsV2 = function listObjectsV2() {
                     return {
-                        promise: function() {
+                        promise() {
                             return q.reject(errorMessage);
                         }
                     };
@@ -243,22 +253,22 @@ module.exports = {
 
                 test.expect(1);
                 provider.init(providerOptions)
-                    .then(function() {
+                    .then(() => {
                         test.ok(false, 'Should have had list objects error');
                     })
-                    .catch(function(err) {
+                    .catch((err) => {
                         test.strictEqual(err, errorMessage);
                     })
-                    .finally(function() {
+                    .finally(() => {
                         test.done();
                     });
             },
 
-            testPutObjectError: function(test) {
-                var errorMessage = 'foobar';
-                awsMock.S3.prototype.putObject = function() {
+            testPutObjectError(test) {
+                const errorMessage = 'foobar';
+                awsMock.S3.prototype.putObject = function putObject() {
                     return {
-                        promise: function() {
+                        promise() {
                             return q.reject(errorMessage);
                         }
                     };
@@ -266,30 +276,29 @@ module.exports = {
 
                 test.expect(1);
                 provider.init(providerOptions)
-                    .then(function() {
+                    .then(() => {
                         test.ok(false, 'Should have had list objects error');
                     })
-                    .catch(function(err) {
+                    .catch((err) => {
                         test.strictEqual(err, errorMessage);
                     })
-                    .finally(function() {
+                    .finally(() => {
                         test.done();
                     });
-
             }
         }
     },
 
     testGetDataFromUri: {
-        setUp: function(callback) {
+        setUp(callback) {
             provider.s3 = {
-                getObject: function(params) {
+                getObject(params) {
                     getObjectParams = params;
 
                     return {
-                        promise: function() {
-                            var deferred = q.defer();
-                            deferred.resolve({Body: 'bucket data'});
+                        promise() {
+                            const deferred = q.defer();
+                            deferred.resolve({ Body: 'bucket data' });
                             return deferred.promise;
                         }
                     };
@@ -300,73 +309,73 @@ module.exports = {
             callback();
         },
 
-        testBasic: function(test) {
+        testBasic(test) {
             test.expect(3);
             provider.getDataFromUri('arn:aws:s3:::myBucket/myKey')
-                .then(function(data) {
+                .then((data) => {
                     test.strictEqual(getObjectParams.Bucket, 'myBucket');
                     test.strictEqual(getObjectParams.Key, 'myKey');
                     test.strictEqual(data, 'bucket data');
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.ok(false, err);
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         },
 
-        testComplexKey: function(test) {
+        testComplexKey(test) {
             test.expect(3);
             provider.getDataFromUri('arn:aws:s3:::myBucket/myFolder/myKey')
-                .then(function(data) {
+                .then((data) => {
                     test.strictEqual(getObjectParams.Bucket, 'myBucket');
                     test.strictEqual(getObjectParams.Key, 'myFolder/myKey');
                     test.strictEqual(data, 'bucket data');
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.ok(false, err);
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         },
 
-        testInvalidUri: function(test) {
+        testInvalidUri(test) {
             test.expect(1);
             provider.getDataFromUri('https://aws.s3.com/myBucket/myKey')
-                .then(function() {
+                .then(() => {
                     test.ok(false, 'Should have thrown invalid URI');
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.notStrictEqual(err.message.indexOf('Invalid URI'), -1);
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         },
 
-        testInvalidArn: function(test) {
+        testInvalidArn(test) {
             test.expect(1);
             provider.getDataFromUri('arn:aws:s3:::foo/')
-                .then(function() {
+                .then(() => {
                     test.ok(false, 'Should have thrown invalid ARN');
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.notStrictEqual(err.message.indexOf('Invalid ARN'), -1);
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         }
     },
 
     testGetInstances: {
-        setUp: function(callback) {
-
-            const INSTANCES_FOLDER = 'instances/';
+        setUp(callback) {
             provider.providerOptions = providerOptions;
+            provider.initOptions = {};
             provider.launchConfigMap = {};
+            provider.instancesToRevoke = [];
 
             provider.nodeProperties = {
                 instanceId: 'id1',
@@ -376,19 +385,22 @@ module.exports = {
             };
 
             provider.autoscaling = {
-                describeAutoScalingGroups: function(params, cb) {
-                    var data = {
+                describeAutoScalingGroups(params, cb) {
+                    const data = {
                         AutoScalingGroups: [
                             {
-                                LaunchConfigurationName: 'mainLaunchConfig',
                                 Instances: [
                                     {
                                         InstanceId: 'id1',
-                                        LaunchConfigurationName: 'id1LaunchConfig'
+                                        LifecycleState: 'InService'
                                     },
                                     {
                                         InstanceId: 'id2',
-                                        LaunchConfigurationName: 'id2LaunchConfig'
+                                        LifecycleState: 'InService'
+                                    },
+                                    {
+                                        InstanceId: 'id3',
+                                        LifecycleState: 'Terminating'
                                     }
                                 ]
                             }
@@ -400,20 +412,20 @@ module.exports = {
             };
 
             provider.s3 = {
-                listObjectsV2: function() {
+                listObjectsV2() {
                     return {
-                        promise: function() {
-                            var deferred = q.defer();
-                            var data = {
+                        promise() {
+                            const deferred = q.defer();
+                            const data = {
                                 Contents: [
                                     {
-                                        Key: INSTANCES_FOLDER + 'id1'
+                                        Key: `${INSTANCES_FOLDER}id1`
                                     },
                                     {
-                                        Key: INSTANCES_FOLDER + 'id2'
+                                        Key: `${INSTANCES_FOLDER}id2`
                                     },
                                     {
-                                        Key: INSTANCES_FOLDER + 'goneMissing'
+                                        Key: `${INSTANCES_FOLDER}goneMissing`
                                     }
                                 ]
                             };
@@ -423,14 +435,15 @@ module.exports = {
                     };
                 },
 
-                getObject: function(params) {
-                    var data;
-                    var deferred;
+                getObject(params) {
+                    let data;
+                    let deferred;
                     instance1 = {
                         isMaster: false,
                         hostname: 'hostname1',
                         mgmtIp: '1.2.3.4',
                         privateIp: '1.2.3.4',
+                        publicIp: '123.456.789.1',
                         mgmtPort: 1000,
                         adminUser: 'myAdminUser',
                         adminPassword: 'myAdminPassword',
@@ -441,6 +454,7 @@ module.exports = {
                         hostname: 'hostname2',
                         mgmtIp: '5.6.7.8',
                         privateIp: '5.6.7.8',
+                        publicIp: '123.456.789.2',
                         mgmtPort: 1000,
                         adminUser: 'myAdminUser',
                         adminPassword: 'myAdminPassword',
@@ -448,23 +462,25 @@ module.exports = {
                     };
 
                     switch (params.Key) {
-                        case INSTANCES_FOLDER + 'id1':
-                            data = {
-                                Body: instance1
-                            };
-                            break;
-                        case INSTANCES_FOLDER + 'id2':
-                            data = {
-                                Body: instance2
-                            };
-                            break;
+                    case `${INSTANCES_FOLDER}id1`:
+                        data = {
+                            Body: instance1
+                        };
+                        break;
+                    case `${INSTANCES_FOLDER}id2`:
+                        data = {
+                            Body: instance2
+                        };
+                        break;
+                    default:
+                        data = undefined;
                     }
 
-                    data = data || {Body: {}};
+                    data = data || { Body: {} };
                     data.Body = JSON.stringify(data.Body);
 
                     return {
-                        promise: function() {
+                        promise() {
                             deferred = q.defer();
                             deferred.resolve(data);
                             return deferred.promise;
@@ -472,14 +488,13 @@ module.exports = {
                     };
                 },
 
-                deleteObjects: function(params) {
-
-                    params.Delete.Objects.forEach(function(element) {
+                deleteObjects(params) {
+                    params.Delete.Objects.forEach((element) => {
                         deletedInstances.push(element.Key);
                     });
 
                     return {
-                        promise: function() {
+                        promise() {
                             return q();
                         }
                     };
@@ -487,16 +502,16 @@ module.exports = {
             };
 
             provider.ec2 = {
-                describeInstances: function() {
+                describeInstances() {
                     return {
-                        promise: function() {
+                        promise() {
                             return q({});
                         }
                     };
                 }
             };
 
-            provider.revokeLicenses = function() {
+            provider.revokeLicenses = function revokeLicenses() {
                 return q();
             };
 
@@ -505,59 +520,41 @@ module.exports = {
             callback();
         },
 
-        testLaunchConfigurationMap: function(test) {
+        testInstanceMap(test) {
             test.expect(3);
             provider.getInstances()
-                .then(function() {
-                    test.strictEqual(provider.launchConfigurationName, 'mainLaunchConfig');
-                    test.strictEqual(provider.launchConfigMap.id1, 'id1LaunchConfig');
-                    test.strictEqual(provider.launchConfigMap.id2, 'id2LaunchConfig');
+                .then((returnedInstances) => {
+                    const mungedInstances = returnedInstances;
+                    delete mungedInstances.id1.lastUpdate;
+                    delete mungedInstances.id2.lastUpdate;
+                    test.strictEqual(Object.keys(mungedInstances).length, 2);
+                    test.deepEqual(mungedInstances.id1, instance1);
+                    test.deepEqual(mungedInstances.id2, instance2);
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.ok(false, err.message);
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         },
 
-        testInstanceMap: function(test) {
-            test.expect(2);
-            provider.getInstances()
-                .then(function(instances) {
-                    delete instances.id1.lastUpdate;
-                    delete instances.id2.lastUpdate;
-                    test.deepEqual(instances.id1, instance1);
-                    test.deepEqual(instances.id2, instance2);
-                })
-                .catch(function(err) {
-                    test.ok(false, err.message);
-                })
-                .finally(function() {
-                    test.done();
-                });
-        },
-
-        testInstanceMapMissingInstanceId: function(test) {
+        testInstanceMapMissingInstanceId(test) {
             // If an instance ID is missing from the db, we should get it from
             // describe instances
-            provider.autoscaling.describeAutoScalingGroups = function(params, cb) {
-                var data = {
+            provider.autoscaling.describeAutoScalingGroups = function describeAutoScalingGroups(params, cb) {
+                const data = {
                     AutoScalingGroups: [
                         {
-                            LaunchConfigurationName: 'mainLaunchConfig',
                             Instances: [
                                 {
-                                    InstanceId: 'id1',
-                                    LaunchConfigurationName: 'id1LaunchConfig'
+                                    InstanceId: 'id1'
                                 },
                                 {
-                                    InstanceId: 'id2',
-                                    LaunchConfigurationName: 'id2LaunchConfig'
+                                    InstanceId: 'id2'
                                 },
                                 {
-                                    InstanceId: 'id3',
-                                    LaunchConfigurationName: 'id3LaunchConfig'
+                                    InstanceId: 'id3'
                                 }
                             ]
                         }
@@ -567,83 +564,196 @@ module.exports = {
                 cb(null, data);
             };
 
-            provider.ec2.describeInstances = function() {
+            provider.ec2.describeInstances = function describeInstances() {
                 return {
-                    promise: function() {
-                        var deferred = q.defer();
-                        var data =  {
+                    promise() {
+                        const deferred = q.defer();
+                        const data = {
                             Reservations: [
-                                    {
-                                        Instances: [
-                                            {
-                                                InstanceId: 'id3',
-                                                PrivateIpAddress: '7.8.9.0',
-                                                PrivateDnsName: 'missingHostname3'
-                                            }
-                                        ]
-                                    }
-                                ]
-                            };
-                            deferred.resolve(data);
-                            return deferred.promise;
+                                {
+                                    Instances: [
+                                        {
+                                            InstanceId: 'id3',
+                                            PublicIpAddress: '111.222.333.444',
+                                            PrivateIpAddress: '7.8.9.0',
+                                            PrivateDnsName: 'missingHostname3'
+                                        }
+                                    ]
+                                }
+                            ]
+                        };
+                        deferred.resolve(data);
+                        return deferred.promise;
                     }
                 };
             };
 
             provider.getInstances()
-                .then(function(instances) {
-                    delete instances.id2.lastUpdate;
-                    delete instances.id3.lastUpdate;
+                .then((returnedInstances) => {
+                    const mungedInstances = returnedInstances;
+                    delete mungedInstances.id2.lastUpdate;
+                    delete mungedInstances.id3.lastUpdate;
                     test.deepEqual(
-                       instances.id3,
-                       {
-                           isMaster: false,
-                           hostname: 'missingHostname3',
-                           mgmtIp: '7.8.9.0',
-                           privateIp: '7.8.9.0',
-                           providerVisible: true
+                        mungedInstances.id3,
+                        {
+                            isMaster: false,
+                            hostname: 'missingHostname3',
+                            mgmtIp: '7.8.9.0',
+                            privateIp: '7.8.9.0',
+                            publicIp: '111.222.333.444',
+                            providerVisible: true
                         }
                     );
-                    test.deepEqual(instances.id2, instance2);
+                    test.deepEqual(returnedInstances.id2, instance2);
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.ok(false, err.message);
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         },
 
-        testNonMastersDeleted: function(test) {
+        testInstanceMapWithExternalTag(test) {
+            const externalTag = {
+                key: 'foo',
+                value: 'bar'
+            };
+            let passedParams;
+
+            provider.ec2 = {
+                describeInstances(params) {
+                    if (params.Filters) {
+                        passedParams = params;
+                        return {
+                            promise() {
+                                return q({
+                                    Reservations: [
+                                        {
+                                            Instances: [
+                                                {
+                                                    InstanceId: '111',
+                                                    State: {
+                                                        Name: 'running'
+                                                    },
+                                                    PrivateIpAddress: '111.112.113.114'
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                });
+                            }
+                        };
+                    }
+                    return {
+                        promise() {
+                            return q({});
+                        }
+                    };
+                }
+            };
+
+            provider.s3 = {
+                listObjectsV2() {
+                    return {
+                        promise() {
+                            const deferred = q.defer();
+                            const data = {
+                                Contents: [
+                                    {
+                                        Key: `${INSTANCES_FOLDER}111`
+                                    }
+                                ]
+                            };
+                            deferred.resolve(data);
+                            return deferred.promise;
+                        }
+                    };
+                },
+
+                getObject(params) {
+                    let data;
+                    instance1 = {
+                        isMaster: false,
+                        hostname: 'hostname1',
+                        mgmtIp: '111.112.113.114',
+                        privateIp: '111.112.113.114',
+                        mgmtPort: 1000,
+                        adminUser: 'myAdminUser',
+                        adminPassword: 'myAdminPassword'
+                    };
+
+                    switch (params.Key) {
+                    case `${INSTANCES_FOLDER}111`:
+                        data = {
+                            Body: instance1
+                        };
+                        break;
+                    default:
+                        data = undefined;
+                    }
+
+                    data = data || { Body: {} };
+                    data.Body = JSON.stringify(data.Body);
+
+                    return {
+                        promise() {
+                            return q(data);
+                        }
+                    };
+                }
+            };
+
+            test.expect(2);
+            provider.getInstances({ externalTag })
+                .then((returnedInstances) => {
+                    test.strictEqual(returnedInstances['111'].external, true);
+                    test.deepEqual(
+                        passedParams.Filters[0],
+                        {
+                            Name: `tag:${externalTag.key}`,
+                            Values: [externalTag.value]
+                        }
+                    );
+                })
+                .catch((err) => {
+                    test.ok(false, err);
+                })
+                .finally(() => {
+                    test.done();
+                });
+        },
+
+        testNonMastersDeleted(test) {
             test.expect(3);
             provider.getInstances()
-                .then(function() {
+                .then(() => {
                     test.strictEqual(deletedInstances.length, 2);
                     test.strictEqual(deletedInstances[0], 'instances/goneMissing');
                     test.strictEqual(deletedInstances[1], 'public_keys/goneMissing');
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.ok(false, err.message);
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         }
     },
 
     testGetNicsByTag: {
-        testBasic: function(test) {
-            var myTag = {
+        testBasic(test) {
+            const myTag = {
                 key: 'foo',
                 value: 'bar'
             };
-            var passedParams;
+            let passedParams;
 
             provider.ec2 = {
-                describeNetworkInterfaces: function(params) {
+                describeNetworkInterfaces(params) {
                     passedParams = params;
                     return {
-                        promise: function() {
+                        promise() {
                             return q({
                                 NetworkInterfaces: [
                                     {
@@ -666,8 +776,8 @@ module.exports = {
 
             test.expect(7);
             provider.getNicsByTag(myTag)
-                .then(function(response) {
-                    test.strictEqual(passedParams.Filters[0].Name, 'tag:' + myTag.key);
+                .then((response) => {
+                    test.strictEqual(passedParams.Filters[0].Name, `tag:${myTag.key}`);
                     test.strictEqual(response[0].id, '1');
                     test.strictEqual(response[0].ip.private, '1.2.3.4');
                     test.strictEqual(response[0].ip.public, undefined);
@@ -675,40 +785,40 @@ module.exports = {
                     test.strictEqual(response[1].ip.private, '2.3.4.5');
                     test.strictEqual(response[1].ip.public, '3.4.5.6');
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.ok(false, err.message);
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         },
 
-        testBadTag: function(test) {
-            var myTag = 'foo';
+        testBadTag(test) {
+            const myTag = 'foo';
 
             test.expect(1);
             provider.getNicsByTag(myTag)
-                .then(function() {
+                .then(() => {
                     test.ok(false, 'getNicsByTag should have thrown');
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.notStrictEqual(err.message.indexOf('key and value'), -1);
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         },
 
-        testError: function(test) {
-            var myTag = {
+        testError(test) {
+            const myTag = {
                 key: 'foo',
                 value: 'bar'
             };
 
             provider.ec2 = {
-                describeNetworkInterfaces: function() {
+                describeNetworkInterfaces() {
                     return {
-                        promise: function() {
+                        promise() {
                             return q.reject(new Error('uh oh'));
                         }
                     };
@@ -717,31 +827,31 @@ module.exports = {
 
             test.expect(1);
             provider.getNicsByTag(myTag)
-                .then(function() {
+                .then(() => {
                     test.ok(false, 'getNicsByTag should have thrown');
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.strictEqual(err.message, 'uh oh');
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         }
     },
 
     testGetVmsByTag: {
-        testBasic: function(test) {
-            var myTag = {
+        testBasic(test) {
+            const myTag = {
                 key: 'foo',
                 value: 'bar'
             };
-            var passedParams;
+            let passedParams;
 
             provider.ec2 = {
-                describeInstances: function(params) {
+                describeInstances(params) {
                     passedParams = params;
                     return {
-                        promise: function() {
+                        promise() {
                             return q({
                                 Reservations: [
                                     {
@@ -772,48 +882,48 @@ module.exports = {
 
             test.expect(6);
             provider.getVmsByTag(myTag)
-                .then(function(response) {
-                    test.strictEqual(passedParams.Filters[0].Name, 'tag:' + myTag.key);
+                .then((response) => {
+                    test.strictEqual(passedParams.Filters[0].Name, `tag:${myTag.key}`);
                     test.strictEqual(response[0].id, '1');
                     test.strictEqual(response[0].ip.private, '1.2.3.4');
                     test.strictEqual(response[1].id, '2');
                     test.strictEqual(response[1].ip.private, '2.3.4.5');
                     test.strictEqual(response[1].ip.public, '3.4.5.6');
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.ok(false, err.message);
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         },
 
-        testBadTag: function(test) {
-            var myTag = 'foo';
+        testBadTag(test) {
+            const myTag = 'foo';
 
             test.expect(1);
             provider.getVmsByTag(myTag)
-                .then(function() {
+                .then(() => {
                     test.ok(false, 'getVmsByTag should have thrown');
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.notStrictEqual(err.message.indexOf('key and value'), -1);
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         },
 
-        testError: function(test) {
-            var myTag = {
+        testError(test) {
+            const myTag = {
                 key: 'foo',
                 value: 'bar'
             };
 
             provider.ec2 = {
-                describeInstances: function() {
+                describeInstances() {
                     return {
-                        promise: function() {
+                        promise() {
                             return q.reject(new Error('uh oh'));
                         }
                     };
@@ -822,49 +932,180 @@ module.exports = {
 
             test.expect(1);
             provider.getVmsByTag(myTag)
-                .then(function() {
+                .then(() => {
                     test.ok(false, 'getVmsByTag should have thrown');
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.strictEqual(err.message, 'uh oh');
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         }
     },
 
-    testElectMaster: function(test) {
-        var instances = {
-            'id1': {
-                privateIp: '1.2.3.4'
-            },
-            'id2': {
-                privateIp: '1.2.4.4'
-            }
-        };
+    testElectMaster: {
+        setUp(callback) {
+            provider.launchConfigMap = {};
+            callback();
+        },
 
-        provider.launchConfigurationName = 'launchConfig';
-        provider.launchConfigMap = {
-            'id1': 'launchConfig',
-            'id2': 'launchConfig'
-        };
+        testBasic(test) {
+            const possibleMasterInstances = {
+                id1: {
+                    privateIp: '1.2.3.4',
+                    versionOk: true,
+                    providerVisible: true
+                },
+                id2: {
+                    privateIp: '1.2.4.4',
+                    versionOk: true,
+                    providerVisible: true
+                }
+            };
 
-        test.expect(1);
-        provider.electMaster(instances)
-            .then(function(electedMasterId) {
-                test.strictEqual(electedMasterId, 'id1');
-            })
-            .catch(function(err) {
-                test.ok(false, err.message);
-            })
-            .finally(function() {
-                test.done();
-            });
+            test.expect(1);
+            provider.electMaster(possibleMasterInstances)
+                .then((electedMasterId) => {
+                    test.strictEqual(electedMasterId, 'id1');
+                })
+                .catch((err) => {
+                    test.ok(false, err.message);
+                })
+                .finally(() => {
+                    test.done();
+                });
+        },
+
+        testProviderNotVisible(test) {
+            const possibleMasterInstances = {
+                id1: {
+                    privateIp: '1.2.3.4',
+                    versionOk: true,
+                    providerVisible: false
+                },
+                id2: {
+                    privateIp: '1.2.4.4',
+                    versionOk: true,
+                    providerVisible: true
+                }
+            };
+
+            test.expect(1);
+            provider.electMaster(possibleMasterInstances)
+                .then((electedMasterId) => {
+                    test.strictEqual(electedMasterId, 'id2');
+                })
+                .catch((err) => {
+                    test.ok(false, err.message);
+                })
+                .finally(() => {
+                    test.done();
+                });
+        },
+
+        testLaunchConfigName(test) {
+            const possibleMasterInstances = {
+                id1: {
+                    privateIp: '1.2.3.4',
+                    versionOk: true,
+                    providerVisible: true,
+                },
+                id2: {
+                    privateIp: '1.2.4.4',
+                    versionOk: true,
+                    providerVisible: true
+                }
+            };
+
+            provider.launchConfigName = 'good';
+            provider.launchConfigMap = {
+                id1: 'bad',
+                id2: 'good'
+            };
+
+            test.expect(1);
+            provider.electMaster(possibleMasterInstances)
+                .then((electedMasterId) => {
+                    test.strictEqual(electedMasterId, 'id2');
+                })
+                .catch((err) => {
+                    test.ok(false, err.message);
+                })
+                .finally(() => {
+                    test.done();
+                });
+        },
+
+        testExternal(test) {
+            const possibleMasterInstances = {
+                id1: {
+                    privateIp: '1.2.3.4',
+                    versionOk: true,
+                    providerVisible: true
+                },
+                id2: {
+                    privateIp: '5.6.7.8',
+                    external: false,
+                    versionOk: true,
+                    providerVisible: true
+                },
+                id3: {
+                    privateIp: '7.8.9.10',
+                    external: true,
+                    versionOk: true,
+                    providerVisible: true
+                }
+            };
+
+            test.expect(1);
+            provider.electMaster(possibleMasterInstances)
+                .then((electedMasterId) => {
+                    test.strictEqual(electedMasterId, 'id3');
+                })
+                .catch((err) => {
+                    test.ok(false, err.message);
+                })
+                .finally(() => {
+                    test.done();
+                });
+        },
+
+        testVersionOk(test) {
+            const possibleMasterInstances = {
+                id1: {
+                    privateIp: '1.2.3.4',
+                    versionOk: true,
+                    providerVisible: true
+                },
+                id2: {
+                    privateIp: '1.2.4.4',
+                    versionOk: true,
+                    providerVisible: true
+                },
+                id3: {
+                    privateIp: '1.2.0.4',
+                    versionOk: false,
+                    providerVisible: true
+                }
+            };
+
+            test.expect(1);
+            provider.electMaster(possibleMasterInstances)
+                .then((electedMasterId) => {
+                    test.strictEqual(electedMasterId, 'id1');
+                })
+                .catch((err) => {
+                    test.ok(false, err.message);
+                })
+                .finally(() => {
+                    test.done();
+                });
+        }
     },
 
     testIsValidMaster: {
-        setUp: function(callback) {
+        setUp(callback) {
             instance1 = {
                 isMaster: false,
                 hostname: 'hostname1',
@@ -883,14 +1124,11 @@ module.exports = {
             provider.nodeProperties = {
                 instanceId: instanceId + 1
             };
-            provider.launchConfigurationName = 'launchConfig';
-            provider.launchConfigMap = {};
-            provider.launchConfigMap[instanceId] = provider.launchConfigurationName;
 
             provider.s3 = {
-                getObject: function() {
+                getObject() {
                     return {
-                        promise: function() {
+                        promise() {
                             return q({});
                         }
                     };
@@ -900,26 +1138,26 @@ module.exports = {
             callback();
         },
 
-        testIsMaster: function(test) {
+        testIsMaster(test) {
             provider.nodeProperties.instanceId = instanceId;
 
             test.expect(1);
             provider.isValidMaster(instanceId, instances)
-                .then(function(isValid) {
+                .then((isValid) => {
                     test.ok(isValid);
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.ok(false, err.message);
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         },
 
-        testNoInstanceInfo: function(test) {
-            provider.s3.getObject = function() {
+        testNoInstanceInfo(test) {
+            provider.s3.getObject = function getObject() {
                 return {
-                    promise: function() {
+                    promise() {
                         return q.reject();
                     }
                 };
@@ -927,41 +1165,40 @@ module.exports = {
 
             test.expect(1);
             provider.isValidMaster(instanceId, instances)
-                .then(function(isValid) {
+                .then((isValid) => {
                     test.ok(isValid);
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.ok(false, err.message);
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         }
     },
 
     testMasterElected: {
-        setUp: function(callback) {
-            provider.nodeProperties = {
-                instanceId: instanceId
-            };
+        setUp(callback) {
+            provider.nodeProperties = { instanceId };
             instanceProtectionParams = undefined;
 
             awsMock = {
                 AutoScaling: {
-                    setInstanceProtection: function(params, cb) {
+                    setInstanceProtection(params, cb) {
                         instanceProtectionParams = params;
                         cb();
                     }
                 },
                 S3: {
-                    listObjectsV2: function() {
+                    listObjectsV2() {
                         return {
-                            promise: function() {
+                            promise() {
                                 return q(
                                     {
                                         KeyCount: 1,
                                         Contents: []
-                                    });
+                                    }
+                                );
                             }
                         };
                     }
@@ -977,41 +1214,43 @@ module.exports = {
             callback();
         },
 
-        testInstanceProtectionSetWhenMaster: function(test) {
+        testInstanceProtectionSetWhenMaster(test) {
             test.expect(3);
             provider.masterElected(instanceId)
-                .then(function() {
+                .then(() => {
                     test.strictEqual(instanceProtectionParams.InstanceIds.length, 1);
                     test.strictEqual(instanceProtectionParams.InstanceIds[0], instanceId);
                     test.ok(instanceProtectionParams.ProtectedFromScaleIn);
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.ok(false, err.message);
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         },
 
-        testInstanceProtectionNotSetWhenNotMaster: function(test) {
+        testInstanceProtectionNotSetWhenNotMaster(test) {
             test.expect(1);
             provider.masterElected('foo')
-                .then(function() {
+                .then(() => {
                     test.strictEqual(instanceProtectionParams, undefined);
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.ok(false, err.message);
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
-
         },
 
-        testOtherMastersSetToNonMaster: function(test) {
-            awsMock.S3.listObjectsV2 = function() {
+        testOtherMastersSetToNonMaster(test) {
+            let instancePut;
+            let instancePutId;
+
+            awsMock.S3.listObjectsV2 = function listObjectsV2() {
                 return {
-                    promise: function() {
+                    promise() {
                         return q(
                             {
                                 KeyCount: 1,
@@ -1021,39 +1260,41 @@ module.exports = {
                                         isMaster: true
                                     }
                                 ]
-                            });
+                            }
+                        );
                     }
                 };
             };
-            awsMock.S3.getObject = function() {
-                    return {
-                        promise: function() {
-                            return q(
-                                {
-                                    Body: JSON.stringify({
-                                        isMaster: true
-                                    })
-                                });
-                        }
-                    };
+            awsMock.S3.getObject = function getObject() {
+                return {
+                    promise() {
+                        return q(
+                            {
+                                Body: JSON.stringify({
+                                    isMaster: true
+                                })
+                            }
+                        );
+                    }
+                };
             };
 
-            provider.putInstance = function(instanceId, instance) {
-                putInstanceId = instanceId;
-                putInstance = instance;
+            provider.putInstance = function putInstance(instanceIdSent, instance) {
+                instancePutId = instanceIdSent;
+                instancePut = instance;
                 return q();
             };
 
             test.expect(2);
             provider.masterElected(instanceId)
-                .then(function() {
-                    test.strictEqual(putInstanceId, '5678');
-                    test.strictEqual(putInstance.isMaster, false);
+                .then(() => {
+                    test.strictEqual(instancePutId, '5678');
+                    test.strictEqual(instancePut.isMaster, false);
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     test.ok(false, err.message);
                 })
-                .finally(function() {
+                .finally(() => {
                     test.done();
                 });
         }

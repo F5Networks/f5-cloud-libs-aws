@@ -1,0 +1,9 @@
+.vscode
+/.eslintrc.yml
+/.gitlab-ci.yml
+/package.sh
+/setVersion.sh
+build/
+coverage/
+dist/
+gitHooks/
