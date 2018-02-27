@@ -15,6 +15,7 @@ test_node4:
         - triggers
     script:
         - npm install --registry ${NPM_REGISTRY}
+        - npm install --registry ${NPM_REGISTRY} @f5devcentral/f5-cloud-libs
         - npm run lint
         - npm test
 
@@ -27,6 +28,7 @@ test_node6:
         - triggers
     script:
         - npm install --registry ${NPM_REGISTRY}
+        - npm install --registry ${NPM_REGISTRY} @f5devcentral/f5-cloud-libs
         - npm run lint
         - npm test
 

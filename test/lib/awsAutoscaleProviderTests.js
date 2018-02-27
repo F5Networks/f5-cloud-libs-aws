@@ -58,8 +58,8 @@ module.exports = {
         fsMock = require('fs');
         awsMock = require('aws-sdk');
         /* eslint-disable import/no-extraneous-dependencies, import/no-unresolved */
-        bigIpMock = require('f5-cloud-libs').bigIp;
-        utilMock = require('f5-cloud-libs').util;
+        bigIpMock = require('@f5devcentral/f5-cloud-libs').bigIp;
+        utilMock = require('@f5devcentral/f5-cloud-libs').util;
         /* eslint-enable import/no-extraneous-dependencies, import/no-unresolved */
 
         AwsAutoscaleProvider = require('../../lib/awsAutoscaleProvider');
