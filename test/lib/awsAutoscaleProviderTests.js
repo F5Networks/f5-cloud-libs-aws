@@ -19,6 +19,8 @@
 process.env.NODE_PATH = `${__dirname}/../../../`;
 require('module').Module._initPaths(); // eslint-disable-line no-underscore-dangle
 
+const AutoscaleInstance = require('@f5devcentral/f5-cloud-libs').autoscaleInstance;
+
 let q;
 let fsMock;
 let awsMock;
@@ -593,6 +595,7 @@ module.exports = {
                     const mungedInstances = returnedInstances;
                     delete mungedInstances.id2.lastUpdate;
                     delete mungedInstances.id3.lastUpdate;
+                    //delete mungedInstances.id3.lastBackup;
                     test.deepEqual(
                         mungedInstances.id3,
                         {
@@ -601,7 +604,12 @@ module.exports = {
                             mgmtIp: '7.8.9.0',
                             privateIp: '7.8.9.0',
                             publicIp: '111.222.333.444',
-                            providerVisible: true
+                            providerVisible: true,
+                            status: AutoscaleInstance.INSTANCE_STATUS_OK,
+                            version: undefined,
+                            versionOk: true,
+                            external: false,
+                            lastBackup: new Date(1970, 1, 1).getTime()
                         }
                     );
                     test.deepEqual(returnedInstances.id2, instance2);
