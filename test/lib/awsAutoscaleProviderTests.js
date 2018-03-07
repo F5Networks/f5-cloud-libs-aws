@@ -595,7 +595,7 @@ module.exports = {
                     const mungedInstances = returnedInstances;
                     delete mungedInstances.id2.lastUpdate;
                     delete mungedInstances.id3.lastUpdate;
-                    //delete mungedInstances.id3.lastBackup;
+
                     test.deepEqual(
                         mungedInstances.id3,
                         {
