@@ -1,6 +1,6 @@
 {
   "name": "@f5devcentral/f5-cloud-libs-aws",
-  "version": "1.6.0",
+  "version": "2.0.0-beta.1",
   "description": "AWS implementation of f5-cloud-libs cloud provider code",
   "keywords": [
     "f5",
@@ -21,7 +21,7 @@
     "q": "^1.4.1"
   },
   "peerDependencies": {
-    "@f5devcentral/f5-cloud-libs": "^4.0.0-alpha.5"
+    "@f5devcentral/f5-cloud-libs": "^4.0.0-beta.1"
   },
   "devDependencies": {
     "eslint": "^4.16.0",
