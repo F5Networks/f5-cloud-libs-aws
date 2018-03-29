@@ -248,7 +248,7 @@ module.exports = {
                 awsMock.S3.prototype.listObjectsV2 = function listObjectsV2() {
                     return {
                         promise() {
-                            return q.reject(errorMessage);
+                            return q.reject(new Error(errorMessage));
                         }
                     };
                 };
@@ -259,7 +259,7 @@ module.exports = {
                         test.ok(false, 'Should have had list objects error');
                     })
                     .catch((err) => {
-                        test.strictEqual(err, errorMessage);
+                        test.notStrictEqual(err.message.indexOf(errorMessage), -1);
                     })
                     .finally(() => {
                         test.done();
@@ -271,7 +271,7 @@ module.exports = {
                 awsMock.S3.prototype.putObject = function putObject() {
                     return {
                         promise() {
-                            return q.reject(errorMessage);
+                            return q.reject(new Error(errorMessage));
                         }
                     };
                 };
@@ -282,7 +282,7 @@ module.exports = {
                         test.ok(false, 'Should have had list objects error');
                     })
                     .catch((err) => {
-                        test.strictEqual(err, errorMessage);
+                        test.notStrictEqual(err.message.indexOf(errorMessage), -1);
                     })
                     .finally(() => {
                         test.done();
@@ -878,6 +878,14 @@ module.exports = {
                                                 },
                                                 PrivateIpAddress: '2.3.4.5',
                                                 PublicIpAddress: '3.4.5.6'
+                                            },
+                                            {
+                                                InstanceId: '3',
+                                                State: {
+                                                    Name: 'pending'
+                                                },
+                                                PrivateIpAddress: '4.5.6.7',
+                                                PublicIpAddress: '5.6.7.8'
                                             }
                                         ]
                                     }
@@ -888,15 +896,81 @@ module.exports = {
                 }
             };
 
-            test.expect(6);
+            test.expect(7);
             provider.getVmsByTag(myTag)
                 .then((response) => {
                     test.strictEqual(passedParams.Filters[0].Name, `tag:${myTag.key}`);
+                    test.strictEqual(response.length, 2);
                     test.strictEqual(response[0].id, '1');
                     test.strictEqual(response[0].ip.private, '1.2.3.4');
                     test.strictEqual(response[1].id, '2');
                     test.strictEqual(response[1].ip.private, '2.3.4.5');
                     test.strictEqual(response[1].ip.public, '3.4.5.6');
+                })
+                .catch((err) => {
+                    test.ok(false, err.message);
+                })
+                .finally(() => {
+                    test.done();
+                });
+        },
+
+        testPending(test) {
+            const myTag = {
+                key: 'foo',
+                value: 'bar'
+            };
+            let passedParams;
+
+            provider.ec2 = {
+                describeInstances(params) {
+                    passedParams = params;
+                    return {
+                        promise() {
+                            return q({
+                                Reservations: [
+                                    {
+                                        Instances: [
+                                            {
+                                                InstanceId: '1',
+                                                State: {
+                                                    Name: 'running'
+                                                },
+                                                PrivateIpAddress: '1.2.3.4'
+                                            },
+                                            {
+                                                InstanceId: '2',
+                                                State: {
+                                                    Name: 'running'
+                                                },
+                                                PrivateIpAddress: '2.3.4.5',
+                                                PublicIpAddress: '3.4.5.6'
+                                            },
+                                            {
+                                                InstanceId: '3',
+                                                State: {
+                                                    Name: 'pending'
+                                                },
+                                                PrivateIpAddress: '4.5.6.7',
+                                                PublicIpAddress: '5.6.7.8'
+                                            }
+                                        ]
+                                    }
+                                ]
+                            });
+                        }
+                    };
+                }
+            };
+
+            test.expect(5);
+            provider.getVmsByTag(myTag, { includePending: true })
+                .then((response) => {
+                    test.strictEqual(passedParams.Filters[0].Name, `tag:${myTag.key}`);
+                    test.strictEqual(response.length, 3);
+                    test.strictEqual(response[2].id, '3');
+                    test.strictEqual(response[2].ip.private, '4.5.6.7');
+                    test.strictEqual(response[2].ip.public, '5.6.7.8');
                 })
                 .catch((err) => {
                     test.ok(false, err.message);
