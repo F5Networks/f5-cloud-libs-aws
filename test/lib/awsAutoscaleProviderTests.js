@@ -376,7 +376,9 @@ module.exports = {
         setUp(callback) {
             provider.providerOptions = providerOptions;
             provider.initOptions = {};
-            provider.launchConfigMap = {};
+            provider.instanceIdToLaunchConfigMap = {};
+            provider.instanceIdToAutoscaleGroupMap = {};
+            provider.autoscaleGroupToLaunchConfigMap = {};
             provider.instancesToRevoke = [];
 
             provider.nodeProperties = {
@@ -1028,7 +1030,9 @@ module.exports = {
 
     testElectMaster: {
         setUp(callback) {
-            provider.launchConfigMap = {};
+            provider.instanceIdToLaunchConfigMap = {};
+            provider.instanceIdToAutoscaleGroupMap = {};
+            provider.autoscaleGroupToLaunchConfigMap = {};
             callback();
         },
 
@@ -1101,9 +1105,17 @@ module.exports = {
             };
 
             provider.launchConfigName = 'good';
-            provider.launchConfigMap = {
+            provider.instanceIdToLaunchConfigMap = {
                 id1: 'bad',
                 id2: 'good'
+            };
+
+            provider.instanceIdToAutoscaleGroupMap = {
+                id1: 'myAsg',
+                id2: 'myAsg'
+            };
+            provider.autoscaleGroupToLaunchConfigMap = {
+                myAsg: 'good'
             };
 
             test.expect(1);
