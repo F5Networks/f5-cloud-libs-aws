@@ -192,10 +192,10 @@ function send_cpu_stat()
   echo "Number of TMMs: $count"
   echo "percent: $stat_result"
 
-  f5-rest-node /config/cloud/aws/node_modules/f5-cloud-libs/node_modules/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $2 --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $stat_result --region $EC2_REGION
+  f5-rest-node /config/cloud/aws/node_modules/@f5devcentral/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $2 --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $stat_result --region $EC2_REGION
   #mon-put-data --metric-name $2 --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues --value $stat_result --region $EC2_REGION
 
-  f5-rest-node /config/cloud/aws/node_modules/f5-cloud-libs/node_modules/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $2 --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $stat_result --dimensions "instance-id=$inst_id" --region $EC2_REGION
+  f5-rest-node /config/cloud/aws/node_modules/@f5devcentral/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $2 --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $stat_result --dimensions "instance-id=$inst_id" --region $EC2_REGION
   #mon-put-data --metric-name $2 --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues --value $stat_result --dimensions "instance-id=$inst_id" --region $EC2_REGION
   techo [end]:send_cpu_stat
 }
@@ -216,10 +216,10 @@ function send_stat()
    get_stat $1 $2
 
 
-   f5-rest-node /config/cloud/aws/node_modules/f5-cloud-libs/node_modules/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $2 --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $stat_result --region $EC2_REGION
+   f5-rest-node /config/cloud/aws/node_modules/@f5devcentral/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $2 --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $stat_result --region $EC2_REGION
    #mon-put-data --metric-name $2 --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues --value $stat_result --region $EC2_REGION
 
-   f5-rest-node /config/cloud/aws/node_modules/f5-cloud-libs/node_modules/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $2 --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $stat_result --dimensions "instance-id=$inst_id" --region $EC2_REGION
+   f5-rest-node /config/cloud/aws/node_modules/@f5devcentral/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $2 --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $stat_result --dimensions "instance-id=$inst_id" --region $EC2_REGION
    #mon-put-data --metric-name $2 --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues --value $stat_result --dimensions "instance-id=$inst_id" --region $EC2_REGION
    techo [end]:send_stat
 }
@@ -242,10 +242,10 @@ function send_stat_delta()
 
    get_stat_delta $1 $2
 
-   f5-rest-node /config/cloud/aws/node_modules/f5-cloud-libs/node_modules/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $3-per-sec --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $stat_result_delta --region $EC2_REGION
+   f5-rest-node /config/cloud/aws/node_modules/@f5devcentral/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $3-per-sec --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $stat_result_delta --region $EC2_REGION
    #mon-put-data --metric-name $3-per-sec --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues --value $stat_result_delta --region $EC2_REGION
 
-   f5-rest-node /config/cloud/aws/node_modules/f5-cloud-libs/node_modules/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $3-per-sec --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $stat_result_delta --dimensions "instance-id=$inst_id" --region $EC2_REGION
+   f5-rest-node /config/cloud/aws/node_modules/@f5devcentral/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $3-per-sec --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $stat_result_delta --dimensions "instance-id=$inst_id" --region $EC2_REGION
    #mon-put-data --metric-name $3-per-sec --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues --value $stat_result_delta --dimensions "instance-id=$inst_id" --region $EC2_REGION
 
    techo [end]:send_stat_delta
@@ -263,9 +263,9 @@ function send_throughput()
    # make sure auto-scale group name is present
    check_auto_scale_group
 
-   f5-rest-node /config/cloud/aws/node_modules/f5-cloud-libs/node_modules/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $2-per-sec --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $1 --region $EC2_REGION
+   f5-rest-node /config/cloud/aws/node_modules/@f5devcentral/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $2-per-sec --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $1 --region $EC2_REGION
 
-   f5-rest-node /config/cloud/aws/node_modules/f5-cloud-libs/node_modules/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $2-per-sec --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $1 --dimensions "instance-id=$inst_id" --region $EC2_REGION
+   f5-rest-node /config/cloud/aws/node_modules/@f5devcentral/f5-cloud-libs-aws/scripts/putMetricData.js --metricName $2-per-sec --namespace $VE_AUTO_SCALE_GROUP_NAME --timestamp $(date --iso-8601=seconds) --statisticValues $1 --dimensions "instance-id=$inst_id" --region $EC2_REGION
 
    techo [end]:send_throughput
 }

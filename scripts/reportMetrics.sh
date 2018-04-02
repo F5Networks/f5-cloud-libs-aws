@@ -38,12 +38,12 @@
 ##############################################################################
 
 if [ "$#" == "0" ]; then
-  bash /config/cloud/aws/node_modules/f5-cloud-libs/node_modules/f5-cloud-libs-aws/scripts/runReportMetrics.sh 2> /dev/null
+  bash /config/cloud/aws/node_modules/@f5devcentral/f5-cloud-libs-aws/scripts/runReportMetrics.sh 2> /dev/null
 else
   while getopts 'd' flag; do
     case "${flag}" in
       d) 
-         bash /config/cloud/aws/node_modules/f5-cloud-libs/node_modules/f5-cloud-libs-aws/scripts/runReportMetrics.sh
+         bash /config/cloud/aws/node_modules/@f5devcentral/f5-cloud-libs-aws/scripts/runReportMetrics.sh
          ;;
       *) 
          echo "Invalid flag"
