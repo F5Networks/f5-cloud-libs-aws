@@ -3,7 +3,7 @@
 # Copyright (C) 2012-2017, F5 Networks, Inc. All rights reserved.
 #
 # reportMetrics.sh
-# Logs - reported to /var/log/aws-metrics.log
+# Logs - reported to /var/log/cloud/aws/aws-metrics.log
 #
 # This script uses CloudWatch tools to report custom BIG-IP metrics
 # to CloudWatch service.
@@ -36,10 +36,10 @@
 #        AWSSecretKey=_your_aws_secret_key
 ##############################################################################
 
-echo "[start]---------------------------------------------------------------------" | tee /var/log/aws-metrics.log
+echo "[start]---------------------------------------------------------------------" | tee /var/log/cloud/aws/aws-metrics.log
 function techo () {
    date=$(/bin/date +"%H:%M:%S")
-   echo "${date} $@" | tee -a /var/log/aws-metrics.log
+   echo "${date} $@" | tee -a /var/log/cloud/aws/aws-metrics.log
 }
 
 
@@ -286,8 +286,12 @@ function send_throughput()
 # having same name as the auto-scale group itself.
 #############################################################
 function get_ve_auto_scale_group_name() {
-    export VE_AUTO_SCALE_GROUP_NAME=$(curl -s -u "admin:" -k http://localhost:8100/mgmt/tm/sys/autoscale-group \
-                                      | jq -r 'select(.autoscaleGroupId != null) | .autoscaleGroupId')
+    if [ -f /config/cloud/hourly_autoscale_group ]; then
+      export VE_AUTO_SCALE_GROUP_NAME=$(cat /config/cloud/hourly_autoscale_group)
+    else
+      export VE_AUTO_SCALE_GROUP_NAME=$(curl -s -u "admin:" -k http://localhost:8100/mgmt/tm/sys/autoscale-group \
+                                        | jq -r 'select(.autoscaleGroupId != null) | .autoscaleGroupId')
+    fi
     techo auto-scale-group $VE_AUTO_SCALE_GROUP_NAME
     check_auto_scale_group
 }
