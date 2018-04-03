@@ -388,23 +388,31 @@ module.exports = {
                 privateIp: '10.11.12.13'
             };
 
+            const Instances = [
+                {
+                    InstanceId: 'id1',
+                    LifecycleState: 'InService'
+                },
+                {
+                    InstanceId: 'id2',
+                    LifecycleState: 'InService'
+                },
+                {
+                    InstanceId: 'id3',
+                    LifecycleState: 'Terminating'
+                }
+            ];
+
             provider.autoscaling = {
                 describeAutoScalingGroups(params, cb) {
                     const data = {
                         AutoScalingGroups: [
                             {
-                                Instances: [
+                                Instances,
+                                Tags: [
                                     {
-                                        InstanceId: 'id1',
-                                        LifecycleState: 'InService'
-                                    },
-                                    {
-                                        InstanceId: 'id2',
-                                        LifecycleState: 'InService'
-                                    },
-                                    {
-                                        InstanceId: 'id3',
-                                        LifecycleState: 'Terminating'
+                                        Key: 'aws:cloudformation:stack-id',
+                                        Value: 'mystack'
                                     }
                                 ]
                             }
@@ -413,6 +421,10 @@ module.exports = {
 
                     cb(null, data);
                 }
+            };
+
+            provider.stackIdToInstanceMap = {
+                mystack: Instances
             };
 
             provider.s3 = {
@@ -546,19 +558,27 @@ module.exports = {
         testInstanceMapMissingInstanceId(test) {
             // If an instance ID is missing from the db, we should get it from
             // describe instances
+            const Instances = [
+                {
+                    InstanceId: 'id1'
+                },
+                {
+                    InstanceId: 'id2'
+                },
+                {
+                    InstanceId: 'id3'
+                }
+            ];
+
             provider.autoscaling.describeAutoScalingGroups = function describeAutoScalingGroups(params, cb) {
                 const data = {
                     AutoScalingGroups: [
                         {
-                            Instances: [
+                            Instances,
+                            Tags: [
                                 {
-                                    InstanceId: 'id1'
-                                },
-                                {
-                                    InstanceId: 'id2'
-                                },
-                                {
-                                    InstanceId: 'id3'
+                                    Key: 'aws:cloudformation:stack-id',
+                                    Value: 'mystack'
                                 }
                             ]
                         }
@@ -566,6 +586,10 @@ module.exports = {
                 };
 
                 cb(null, data);
+            };
+
+            provider.stackIdToInstanceMap = {
+                mystack: Instances
             };
 
             provider.ec2.describeInstances = function describeInstances() {
