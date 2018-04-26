@@ -618,7 +618,6 @@ module.exports = {
 
             provider.getInstances()
                 .then((returnedInstances) => {
-
                     test.strictEqual(returnedInstances.id3.isMaster, false);
                     test.strictEqual(returnedInstances.id3.hostname, 'missingHostname3');
                     test.strictEqual(returnedInstances.id3.mgmtIp, '7.8.9.0');
