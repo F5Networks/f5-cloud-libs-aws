@@ -618,26 +618,16 @@ module.exports = {
 
             provider.getInstances()
                 .then((returnedInstances) => {
-                    const mungedInstances = returnedInstances;
-                    delete mungedInstances.id2.lastUpdate;
-                    delete mungedInstances.id3.lastUpdate;
 
-                    test.deepEqual(
-                        mungedInstances.id3,
-                        {
-                            isMaster: false,
-                            hostname: 'missingHostname3',
-                            mgmtIp: '7.8.9.0',
-                            privateIp: '7.8.9.0',
-                            publicIp: '111.222.333.444',
-                            providerVisible: true,
-                            status: AutoscaleInstance.INSTANCE_STATUS_OK,
-                            version: undefined,
-                            versionOk: true,
-                            external: false,
-                            lastBackup: new Date(1970, 1, 1).getTime()
-                        }
-                    );
+                    test.strictEqual(returnedInstances.id3.isMaster, false);
+                    test.strictEqual(returnedInstances.id3.hostname, 'missingHostname3');
+                    test.strictEqual(returnedInstances.id3.mgmtIp, '7.8.9.0');
+                    test.strictEqual(returnedInstances.id3.privateIp, '7.8.9.0');
+                    test.strictEqual(returnedInstances.id3.publicIp, '111.222.333.444');
+                    test.strictEqual(returnedInstances.id3.providerVisible, true);
+                    test.strictEqual(returnedInstances.id3.external, false);
+                    test.strictEqual(returnedInstances.id3.status, AutoscaleInstance.INSTANCE_STATUS_OK);
+
                     test.deepEqual(returnedInstances.id2, instance2);
                 })
                 .catch((err) => {
