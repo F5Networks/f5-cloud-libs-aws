@@ -38,6 +38,9 @@ const user = 'foo';
 const password = 'bar';
 const instanceId = '1234';
 
+let fsReadFile;
+let fsStat;
+
 let iidDoc;
 let instances;
 let instance1;
@@ -69,6 +72,9 @@ module.exports = {
 
         provider = new AwsAutoscaleProvider({ clOptions: { user, password } });
 
+        fsReadFile = fsMock.readFile;
+        fsStat = fsMock.stat;
+
         awsMock.config = {
             configUpdate: {},
             update(config) {
@@ -90,6 +96,9 @@ module.exports = {
     },
 
     tearDown(callback) {
+        fsMock.readFile = fsReadFile;
+        fsMock.stat = fsStat;
+
         Object.keys(require.cache).forEach((key) => {
             delete require.cache[key];
         });
@@ -147,7 +156,7 @@ module.exports = {
                 };
             };
 
-            fsMock.readFile = function modify(filename, cb) {
+            fsMock.readFile = function readFile(filename, cb) {
                 let data;
 
                 switch (filename) {
@@ -159,6 +168,9 @@ module.exports = {
                 }
 
                 cb(null, data);
+            };
+            fsMock.stat = function stat(filename, cb) {
+                cb(null);
             };
 
             callback();
@@ -216,6 +228,7 @@ module.exports = {
                         }
                     };
                 };
+                providerOptions.region = 'foo';
                 callback();
             },
 
