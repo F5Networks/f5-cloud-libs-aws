@@ -22,7 +22,7 @@
     "q": "^1.5.1"
   },
   "peerDependencies": {
-    "@f5devcentral/f5-cloud-libs": "^4.1.0-beta.1"
+    "@f5devcentral/f5-cloud-libs": "beta"
   },
   "devDependencies": {
     "eslint": "^4.19.1",
