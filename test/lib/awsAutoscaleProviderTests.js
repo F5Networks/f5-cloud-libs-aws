@@ -616,8 +616,7 @@ module.exports = {
                                         {
                                             InstanceId: 'id3',
                                             PublicIpAddress: '111.222.333.444',
-                                            PrivateIpAddress: '7.8.9.0',
-                                            PrivateDnsName: 'missingHostname3'
+                                            PrivateIpAddress: '7.8.9.0'
                                         }
                                     ]
                                 }
@@ -632,7 +631,6 @@ module.exports = {
             provider.getInstances()
                 .then((returnedInstances) => {
                     test.strictEqual(returnedInstances.id3.isMaster, false);
-                    test.strictEqual(returnedInstances.id3.hostname, 'missingHostname3');
                     test.strictEqual(returnedInstances.id3.mgmtIp, '7.8.9.0');
                     test.strictEqual(returnedInstances.id3.privateIp, '7.8.9.0');
                     test.strictEqual(returnedInstances.id3.publicIp, '111.222.333.444');
