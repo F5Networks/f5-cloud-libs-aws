@@ -301,6 +301,114 @@ module.exports = {
                         test.done();
                     });
             }
+        },
+
+        testAutoscale: {
+            testInstanceMaps(test) {
+                const nextToken = 'this is the next token';
+
+                const g1Instances = [
+                    {
+                        InstanceId: 'g1id1',
+                        LifecycleState: 'InService',
+                        LaunchConfigurationName: 'launchConfig1'
+                    },
+                    {
+                        InstanceId: 'g1id2',
+                        LifecycleState: 'InService',
+                        LaunchConfigurationName: 'launchConfig1'
+                    }
+                ];
+                const g2Instances = [
+                    {
+                        InstanceId: 'g2id1',
+                        LifecycleState: 'InService',
+                        LaunchConfigurationName: 'launchConfig2'
+                    },
+                    {
+                        InstanceId: 'g2id2',
+                        LifecycleState: 'InService',
+                        LaunchConfigurationName: 'launchConfig2'
+                    }
+                ];
+
+                awsMock.AutoScaling.prototype.describeAutoScalingGroups
+                    = function describeAutoScalingGroups(params, cb) {
+                        let data;
+                        if (!params.NextToken) {
+                            data = {
+                                NextToken: nextToken,
+                                AutoScalingGroups: [
+                                    {
+                                        AutoScalingGroupName: 'group1',
+                                        Instances: g1Instances,
+                                        Tags: [
+                                            {
+                                                Key: 'aws:cloudformation:stack-id',
+                                                Value: 'stack1'
+                                            }
+                                        ]
+                                    }
+                                ]
+                            };
+                        } else if (params.NextToken === nextToken) {
+                            data = {
+                                AutoScalingGroups: [
+                                    {
+                                        AutoScalingGroupName: 'group2',
+                                        Instances: g2Instances,
+                                        Tags: [
+                                            {
+                                                Key: 'aws:cloudformation:stack-id',
+                                                Value: 'stack2'
+                                            }
+                                        ]
+                                    }
+                                ]
+                            };
+                        }
+
+                        cb(null, data);
+                    };
+
+                test.expect(3);
+                provider.init(providerOptions, { autoscale: true })
+                    .then(() => {
+                        test.deepEqual(
+                            provider.instanceIdToAutoscaleGroupMap,
+                            {
+                                g1id1: 'group1',
+                                g1id2: 'group1',
+                                g2id1: 'group2',
+                                g2id2: 'group2'
+                            }
+
+                        );
+                        test.deepEqual(
+                            provider.instanceIdToLaunchConfigMap,
+                            {
+                                g1id1: 'launchConfig1',
+                                g1id2: 'launchConfig1',
+                                g2id1: 'launchConfig2',
+                                g2id2: 'launchConfig2'
+                            }
+                        );
+
+                        test.deepEqual(
+                            provider.stackIdToInstanceMap,
+                            {
+                                stack1: g1Instances,
+                                stack2: g2Instances
+                            }
+                        );
+                    })
+                    .catch((err) => {
+                        test.ok(false, err.message);
+                    })
+                    .finally(() => {
+                        test.done();
+                    });
+            }
         }
     },
 
