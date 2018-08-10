@@ -51,6 +51,11 @@ let deletedInstances;
 let getObjectParams;
 let instanceProtectionParams;
 
+let createTagRequest;
+let deleteTagRequests;
+let passedDescribeTagsParams;
+let describeTagsResults;
+
 const INSTANCES_FOLDER = 'instances/';
 
 // Our tests cause too many event listeners. Turn off the check.
@@ -1524,5 +1529,89 @@ module.exports = {
                     test.done();
                 });
         }
+    },
+    testTagMaster: {
+        setUp(callback) {
+            provider.ec2 = {
+                describeTags(params) {
+                    passedDescribeTagsParams = params;
+                    return {
+                        promise() {
+                            return q(describeTagsResults);
+                        }
+                    };
+                },
+                createTags(params) {
+                    createTagRequest = params;
+                    return {
+                        promise() {
+                            return q();
+                        }
+                    };
+                },
+                deleteTags(params) {
+                    return {
+                        promise() {
+                            return q(deleteTagRequests.push(params));
+                        }
+                    };
+                }
+            };
+
+            deleteTagRequests = [];
+
+            callback();
+        },
+
+        testTagMasterWithStackName(test) {
+            describeTagsResults = {
+                Tags:
+                    [{
+                        Key: 'aws:cloudformation:stack-name',
+                        ResourceId: 'i-06b5bd27acbfa0cc3',
+                        ResourceType: 'instance',
+                        Value: 'StackName'
+                    },
+                    ]
+            };
+
+            const clusterInstances = [
+                {
+                    InstanceId: '1234',
+                    LifecycleState: 'InService'
+                },
+                {
+                    InstanceId: '5678',
+                    LifecycleState: 'InService'
+                }
+            ];
+
+            const masterId = '1234';
+
+            const expectedCreateTags = {
+                Resources: ['1234'],
+                Tags: [
+                    {
+                        Key: 'StackName-master',
+                        Value: 'True'
+                    }
+                ]
+            };
+
+            test.expect(4);
+            provider.tagMasterInstance(masterId, clusterInstances)
+                .then(() => {
+                    test.strictEqual(passedDescribeTagsParams.Filters[0].Values[0], masterId);
+                    test.strictEqual(expectedCreateTags.Resources[0], createTagRequest.Resources[0]);
+                    test.strictEqual(expectedCreateTags.Tags[0].Key, createTagRequest.Tags[0].Key);
+                    test.notStrictEqual(deleteTagRequests[0].Resources[0], masterId);
+                })
+                .catch((err) => {
+                    test.ok(false, err.message);
+                })
+                .finally(() => {
+                    test.done();
+                });
+        },
     }
 };
