@@ -1,23 +1,10 @@
-image: node:4
+image: node:6
 
 stages:
     - test
     - package
     - publish
     - notify
-
-test_node4:
-    image: node:4
-    tags:
-        - docker-executor
-    stage: test
-    except:
-        - triggers
-    script:
-        - npm install --registry ${NPM_REGISTRY} @f5devcentral/f5-cloud-libs@beta
-        - npm install --registry ${NPM_REGISTRY}
-        - npm run lint
-        - npm test
 
 test_node6:
     image: node:6
@@ -31,6 +18,20 @@ test_node6:
         - npm install --registry ${NPM_REGISTRY}
         - npm run lint
         - npm test
+
+test_node8:
+    image: node:8
+    tags:
+        - docker-executor
+    stage: test
+    except:
+        - triggers
+    script:
+        - npm install --registry ${NPM_REGISTRY} @f5devcentral/f5-cloud-libs@beta
+        - npm install --registry ${NPM_REGISTRY}
+        - npm run lint
+        - npm test
+
 
 package:
     tags:
