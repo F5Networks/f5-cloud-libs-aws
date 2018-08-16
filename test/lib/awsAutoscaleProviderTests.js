@@ -51,7 +51,7 @@ let deletedInstances;
 let getObjectParams;
 let instanceProtectionParams;
 
-let createTagRequest;
+let passedCreateTagsParams;
 let deleteTagRequests;
 let passedDescribeTagsParams;
 let describeTagsResults;
@@ -1542,7 +1542,7 @@ module.exports = {
                     };
                 },
                 createTags(params) {
-                    createTagRequest = params;
+                    passedCreateTagsParams = params;
                     return {
                         promise() {
                             return q();
@@ -1575,36 +1575,43 @@ module.exports = {
                     ]
             };
 
-            const clusterInstances = [
-                {
-                    InstanceId: '1234',
+            const clusterInstances = {
+                1234: {
                     LifecycleState: 'InService'
                 },
-                {
-                    InstanceId: '5678',
+
+                5678: {
                     LifecycleState: 'InService'
                 }
-            ];
+            };
 
             const masterId = '1234';
-
-            const expectedCreateTags = {
-                Resources: ['1234'],
-                Tags: [
-                    {
-                        Key: 'StackName-master',
-                        Value: 'True'
-                    }
-                ]
-            };
 
             test.expect(4);
             provider.tagMasterInstance(masterId, clusterInstances)
                 .then(() => {
                     test.strictEqual(passedDescribeTagsParams.Filters[0].Values[0], masterId);
-                    test.strictEqual(expectedCreateTags.Resources[0], createTagRequest.Resources[0]);
-                    test.strictEqual(expectedCreateTags.Tags[0].Key, createTagRequest.Tags[0].Key);
-                    test.notStrictEqual(deleteTagRequests[0].Resources[0], masterId);
+                    test.deepEqual(passedCreateTagsParams,
+                        {
+                            Resources: ['1234'],
+                            Tags: [
+                                {
+                                    Key: 'StackName-master',
+                                    Value: 'true'
+                                }
+                            ]
+                        });
+                    test.deepEqual(deleteTagRequests[0],
+                        {
+                            Resources: ['5678'],
+                            Tags: [
+                                {
+                                    Key: 'StackName-master',
+                                    Value: 'true'
+                                }
+                            ]
+                        });
+                    test.strictEqual(deleteTagRequests.length, 1);
                 })
                 .catch((err) => {
                     test.ok(false, err.message);
@@ -1612,6 +1619,6 @@ module.exports = {
                 .finally(() => {
                     test.done();
                 });
-        },
+        }
     }
 };
