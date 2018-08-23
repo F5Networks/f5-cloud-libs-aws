@@ -448,6 +448,38 @@ module.exports = {
                 });
         },
 
+        testCn(test) {
+            test.expect(3);
+            provider.getDataFromUri('arn:aws-cn:s3:::myBucket/myKey')
+                .then((data) => {
+                    test.strictEqual(getObjectParams.Bucket, 'myBucket');
+                    test.strictEqual(getObjectParams.Key, 'myKey');
+                    test.strictEqual(data, 'bucket data');
+                })
+                .catch((err) => {
+                    test.ok(false, err);
+                })
+                .finally(() => {
+                    test.done();
+                });
+        },
+
+        testUsGov(test) {
+            test.expect(3);
+            provider.getDataFromUri('arn:aws-us-gov:s3:::myBucket/myKey')
+                .then((data) => {
+                    test.strictEqual(getObjectParams.Bucket, 'myBucket');
+                    test.strictEqual(getObjectParams.Key, 'myKey');
+                    test.strictEqual(data, 'bucket data');
+                })
+                .catch((err) => {
+                    test.ok(false, err);
+                })
+                .finally(() => {
+                    test.done();
+                });
+        },
+
         testComplexKey(test) {
             test.expect(3);
             provider.getDataFromUri('arn:aws:s3:::myBucket/myFolder/myKey')
