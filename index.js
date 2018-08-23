@@ -16,5 +16,5 @@
 'use strict';
 
 module.exports = {
-    provider: require("./lib/awsAutoscaleProvider.js")
+    provider: require("./lib/awsCloudProvider.js")
 };

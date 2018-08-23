@@ -24,7 +24,7 @@ const AutoscaleInstance = require('@f5devcentral/f5-cloud-libs').autoscaleInstan
 let q;
 let fsMock;
 let awsMock;
-let AwsAutoscaleProvider;
+let AwsCloudProvider;
 let bigIpMock;
 let utilMock;
 let provider;
@@ -72,10 +72,10 @@ module.exports = {
         utilMock = require('@f5devcentral/f5-cloud-libs').util;
         /* eslint-enable import/no-extraneous-dependencies, import/no-unresolved */
 
-        AwsAutoscaleProvider = require('../../lib/awsAutoscaleProvider');
+        AwsCloudProvider = require('../../lib/awsCloudProvider');
         /* eslint-enable global-require */
 
-        provider = new AwsAutoscaleProvider({ clOptions: { user, password } });
+        provider = new AwsCloudProvider({ clOptions: { user, password } });
 
         fsReadFile = fsMock.readFile;
         fsStat = fsMock.stat;
