@@ -56,6 +56,8 @@ let deleteTagRequests;
 let passedDescribeTagsParams;
 let describeTagsResults;
 
+let passedSignalResourceParams;
+
 const INSTANCES_FOLDER = 'instances/';
 
 // Our tests cause too many event listeners. Turn off the check.
@@ -1651,6 +1653,153 @@ module.exports = {
                 .finally(() => {
                     test.done();
                 });
+        }
+    },
+
+    testSignalInstanceProvisioned: {
+        setUp(callback) {
+            provider.ec2 = {
+                describeTags() {
+                    const response = {
+                        Tags: [
+                            {
+                                Key: 'aws:cloudformation:stack-name',
+                                ResourceId: 'i-06b5bd27acbfa0cc3',
+                                ResourceType: 'instance',
+                                Value: 'StackName'
+                            }
+                        ]
+                    };
+                    return {
+                        promise() {
+                            return q(response);
+                        }
+                    };
+                }
+            };
+
+            provider.cloudFormation = {
+                listStackResources(params, cb) {
+                    const response = {
+                        StackResourceSummaries: [
+                            {
+                                LogicalResourceId: 'BigIpAutoScaleGroup',
+                                ResourceType: 'AWS::AutoScaling::AutoScalingGroup'
+                            }
+                        ]
+                    };
+                    cb(null, response);
+                },
+                signalResource(params, cb) {
+                    passedSignalResourceParams = params;
+                    cb(null, '');
+                }
+            };
+
+            callback();
+        },
+
+        testSignalResourceCallSuccess(test) {
+            test.expect(1);
+            provider.signalInstanceProvisioned('i-1234')
+                .then(() => {
+                    test.deepEqual(passedSignalResourceParams, {
+                        LogicalResourceId: 'BigIpAutoScaleGroup',
+                        StackName: 'StackName',
+                        Status: 'SUCCESS',
+                        UniqueId: 'i-1234'
+                    });
+                })
+                .catch((err) => {
+                    test.ok(false, err.message);
+                })
+                .done(() => {
+                    test.done();
+                });
+        },
+
+        testSignalResourceNoInstance(test) {
+            provider.nodeProperties = {
+                instanceId: 'i-1234',
+                hostname: 'hostname'
+            };
+
+            test.expect(1);
+            provider.signalInstanceProvisioned()
+                .then(() => {
+                    test.deepEqual(passedSignalResourceParams, {
+                        LogicalResourceId: 'BigIpAutoScaleGroup',
+                        StackName: 'StackName',
+                        Status: 'SUCCESS',
+                        UniqueId: 'i-1234'
+                    });
+                })
+                .catch((err) => {
+                    test.ok(false, err.message);
+                })
+                .done(() => {
+                    test.done();
+                });
+        },
+
+        testErrors: {
+            testSignalNoInstanceStackTag(test) {
+                provider.ec2 = {
+                    describeTags() {
+                        const response = {
+                            Tags: [
+                                {
+                                    Key: 'aws:cloudformation:stack-id',
+                                    Value: 'stack1'
+                                }
+                            ]
+                        };
+                        return {
+                            promise() {
+                                return q(response);
+                            }
+                        };
+                    }
+                };
+
+                test.expect(1);
+                provider.signalInstanceProvisioned('i-1234')
+                    .then(() => {
+                        test.ok(false, 'signalInstanceProvisioned should have thrown');
+                    })
+                    .catch((err) => {
+                        test.strictEqual(err.message, 'Cannot find stack-name for instance: i-1234');
+                    })
+                    .done(() => {
+                        test.done();
+                    });
+            },
+
+            testSignalNoInstanceTags(test) {
+                provider.ec2 = {
+                    describeTags() {
+                        return {
+                            promise() {
+                                return q.reject('Unable to get instance tags');
+                            }
+                        };
+                    }
+                };
+
+                const expectedError = 'Unable to get stack-name from instance. Unable to get instance tags';
+
+                test.expect(1);
+                provider.signalInstanceProvisioned('i-1234')
+                    .then(() => {
+                        test.ok(false, 'signalInstanceProvisioned should have thrown');
+                    })
+                    .catch((err) => {
+                        test.strictEqual(err.message, expectedError);
+                    })
+                    .done(() => {
+                        test.done();
+                    });
+            }
         }
     }
 };
