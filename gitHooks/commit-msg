@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-git secrets --add "f5net.com"
-git secrets --commit_msg_hook -- "$@"
