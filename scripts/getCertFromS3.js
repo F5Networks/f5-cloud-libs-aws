@@ -14,24 +14,32 @@
  * limitations under the License.
  */
 
-var AWS = require('aws-sdk');
-var s3 = new AWS.S3();
-var q = require('q');
-var uri;
-var params;
-var file;
+'use strict';
+
+const AWS = require('aws-sdk');
+
+const s3 = new AWS.S3();
+const q = require('q');
+const mkdirp = require('mkdirp');
+const path = require('path');
+
+const filePath = '/config/ssl/ssl.key/';
+let parts;
 
 if (process.argv.length <= 2) {
-    console.log("Usage: " + __filename + " <ARN> (Format should be arn:aws:s3:::bucket_name/key_name)");
+    console.log(`Usage: ${__filename} <ARN> (Format should be arn:aws:s3:::bucket_name/key_name)`);
     process.exit(-1);
 }
- 
-uri = process.argv[2];
- 
-console.log('uri: ' + uri);
 
-if (!uri.startsWith('arn:aws:s3:::')) {
-    return q.reject(new Error("Invalid URI. URI should be an S3 arn."));
+const uri = process.argv[2];
+
+console.log(`uri: ${uri}`);
+
+const arnRegex = /arn:aws[A-Za-z0-9_-]*:s3:::/;
+
+if (!uri.match(arnRegex)) {
+    console.log('Invalid URI. URI should be an S3 arn');
+    return q.reject(new Error('Invalid URI. URI should be an S3 arn.'));
 }
 
 // ARN format is arn:aws:s3:::bucket_name/key_name
@@ -42,19 +50,24 @@ parts = parts[1].split(/\/(.+)/);
 
 // length === 3 because splitting on just the first match leaves an empty string at the end
 if (parts.length !== 3) {
-    return q.reject(new Error("Invalid ARN. Format should be arn:aws:s3:::bucket_name/key_name"));
+    console.log('Invalid ARN. Format should be arn:aws:s3:::bucket_name/key_name');
+    return q.reject(new Error('Invalid ARN. Format should be arn:aws:s3:::bucket_name/key_name'));
 }
 
-bucket = parts[0];
-key = parts[1];
-
-params = {
-    Bucket: bucket,
-    Key: key
+const params = {
+    Bucket: parts[0],
+    Key: parts[1]
 };
 
-console.log(bucket)
-console.log(key)
+console.log(params.Bucket);
+console.log(params.Key);
 
-file = require('fs').createWriteStream('/config/ssl/ssl.key/'+key);
+mkdirp(path.dirname(params.Key), (err) => {
+    if (err) {
+        console.log(err);
+    }
+});
+
+const file = require('fs').createWriteStream(filePath + params.Key);
+
 s3.getObject(params).createReadStream().pipe(file);
