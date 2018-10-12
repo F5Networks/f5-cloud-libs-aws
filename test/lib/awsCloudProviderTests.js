@@ -1613,13 +1613,36 @@ module.exports = {
                 1234: {
                     LifecycleState: 'InService'
                 },
-
                 5678: {
+                    LifecycleState: 'InService'
+                },
+                9012: {
                     LifecycleState: 'InService'
                 }
             };
 
             const masterId = '1234';
+
+            const expectedDeleteTagsRequest = [
+                {
+                    Resources: ['5678'],
+                    Tags: [
+                        {
+                            Key: 'StackName-master',
+                            Value: 'true'
+                        }
+                    ]
+                },
+                {
+                    Resources: ['9012'],
+                    Tags: [
+                        {
+                            Key: 'StackName-master',
+                            Value: 'true'
+                        }
+                    ]
+                }
+            ];
 
             test.expect(4);
             provider.tagMasterInstance(masterId, clusterInstances)
@@ -1635,17 +1658,41 @@ module.exports = {
                                 }
                             ]
                         });
-                    test.deepEqual(deleteTagRequests[0],
-                        {
-                            Resources: ['5678'],
-                            Tags: [
-                                {
-                                    Key: 'StackName-master',
-                                    Value: 'true'
-                                }
-                            ]
-                        });
-                    test.strictEqual(deleteTagRequests.length, 1);
+                    test.deepEqual(deleteTagRequests, expectedDeleteTagsRequest);
+                    test.strictEqual(deleteTagRequests.length, 2);
+                })
+                .catch((err) => {
+                    test.ok(false, err.message);
+                })
+                .finally(() => {
+                    test.done();
+                });
+        },
+
+        testTagMasterSingleInstance(test) {
+            describeTagsResults = {
+                Tags:
+                    [{
+                        Key: 'aws:cloudformation:stack-name',
+                        ResourceId: 'i-06b5bd27acbfa0cc3',
+                        ResourceType: 'instance',
+                        Value: 'StackName'
+                    },
+                    ]
+            };
+
+            const clusterInstances = {
+                1234: {
+                    LifecycleState: 'InService'
+                }
+            };
+
+            const masterId = '1234';
+
+            test.expect(1);
+            provider.tagMasterInstance(masterId, clusterInstances)
+                .then(() => {
+                    test.strictEqual(deleteTagRequests.length, 0);
                 })
                 .catch((err) => {
                     test.ok(false, err.message);
