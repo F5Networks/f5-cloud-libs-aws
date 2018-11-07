@@ -34,6 +34,7 @@ parser
     .option('--tag-key [type]', 'Specify the key for the tag', 'f5_deployment')
     .option('--tag-value [type]', 'Specify the value of the tag', '')
     .option('--vip-allocation-id [type]', 'Specify the Allocation ID of the Virtual IP address', '')
+    .option('--private-ip [type]', 'Specify the Private IP address to associate with', '')
     .option('--associate-eni [type]', 'Specify the ENI of the network interface to associate with', '')
     .option('--peer-instance-id [type]', 'Specify instance ID of the peer instance', '')
     .option('--password-uri [type]', 'Specify URI password of the BIG-IQ', '')
@@ -44,10 +45,13 @@ const BigIp = f5CloudLibs.bigIp;
 const bigip = new BigIp({logger});
 
 // Initialize global vars
+const PRIMARY_STATE = "PRIMARY";
+const SECONDARY_STATE = "SECONDARY";
 const IID_FILE_PATH = '/shared/vadc/aws/iid-document';
 const TAG_KEY = parser.tagKey;
 let TAG_VALUE = parser.tagValue;
 let AllocationEipID = parser.vipAllocationId;
+let PrivateIpAddressToAssociate = parser.privateIp;
 let PeerInstanceId = parser.peerInstanceId;
 let passwordUri = parser.passwordUri;
 
@@ -59,7 +63,6 @@ let NetworkAddresses = [];
 let ec2;
 let curIidData;
 let associateRequired = false;
-let initialized = false;
 let bigIqPasswordData = {};
 
 /**
@@ -67,14 +70,13 @@ let bigIqPasswordData = {};
  * 
  * @return {Promise} A promise which is resolved upon PRIMARY state of the current instance is determined
  */
-function isPrimaryInstance() {
+function getFailoverStatus() {
     const deferred = q.defer();
     util.readData(passwordUri,
         true)
     .then((uriData) => {
         bigIqPasswordData = util.lowerCaseKeys(
             JSON.parse(uriData.trim()));
-        console.log("BigIQ password: ", bigIqPasswordData.admin);
         bigip.init(
             'localhost',
             'admin',
@@ -90,8 +92,8 @@ function isPrimaryInstance() {
         ]);
     })
     .then((results) => {
-        console.log("Failover state:", results[0].nodeRole);
-        deferred.resolve();
+        let failover_status = results[0].nodeRole;
+        deferred.resolve(failover_status);
     })
     .catch((err) => {
         logger.info(`Error getting failover state: ${err}`);
@@ -137,7 +139,6 @@ function getIidDoc() {
             deferred.reject(err);
         }
         else {
-            console.log("IID data: ", data.toString());
             deferred.resolve(JSON.parse(data.toString()));
         }
     });
@@ -147,22 +148,19 @@ function getIidDoc() {
 /**
  * Get tag information of an Elastic IP
  * 
- * @param {String} tag_key - Key of the tag
- * @param {String} tag_value - Value of the tag
- * 
  * @returns {Promise} A promise which is resolved upon tag information is retrieved
  */
-function getTagInfo(tag_key, tag_value) {
+function getTagInfo() {
     const deferred = q.defer();
     var params = {
         Filters: [
             {
                 Name: "key",
-                Values: [tag_key]
+                Values: [TAG_KEY]
             },
             {
                 Name: "value",
-                Values: [tag_value]
+                Values: [TAG_VALUE]
             },
             {
                 Name: "resource-type",
@@ -215,7 +213,7 @@ function addTag(tagData) {
         }});
     }
     else if (num_tags == 1) {
-        logger.info(`Tag found, no need to tag resource: ${tagData.Tags[0]}`);
+        logger.info('Tag found, no need add tag');
         deferred.resolve(tagData);
     }
     else
@@ -229,7 +227,7 @@ function addTag(tagData) {
 /**
  *  Get  network addresses
  */
-function getNetworkAddresses(curInstanceId, peerInstanceId)
+function getNetworkAddresses(curInstanceId)
 {
     const deferred = q.defer();
     var describe_addresses_params = {
@@ -245,7 +243,7 @@ function getNetworkAddresses(curInstanceId, peerInstanceId)
     else {
         for (let value of data["Addresses"]) {
             var instanceId = value.InstanceId;
-            if (instanceId != undefined && (instanceId == curInstanceId || instanceId == peerInstanceId)) {
+            if (instanceId != undefined && (instanceId == curInstanceId || instanceId == PeerInstanceId)) {
                 NetworkAddresses.push(value);
             }
         }
@@ -287,6 +285,7 @@ function disassociateIpAddress() {
         });
     }
     else {
+        logger.info(`${PRIMARY_STATE} device already has virtual IP address. Disassociation is not required.`);
         deferred.resolve();
     }
     return deferred.promise;
@@ -298,14 +297,15 @@ function disassociateIpAddress() {
 function associateIpAddress() {
     const deferred = q.defer();
     if (associateRequired) {
-        logger.info('Associate Virtual IP address');
+        logger.info('Associate Virtual IP address.');
         var params = {
             AllocationId: allocationIdToAssociate, 
-            NetworkInterfaceId: networkInterfaceIdIdToAssociate
+            NetworkInterfaceId: networkInterfaceIdIdToAssociate,
+            PrivateIpAddress: PrivateIpAddressToAssociate
         };
         ec2.associateAddress(params, function(err, data) {
             if (err) {
-                logger.error(`Fail to associate IP address: ${err}`);
+                logger.error(`Fail to associate IP address: ${err}.`);
                 deferred.reject(err);
             }
             else {
@@ -314,6 +314,7 @@ function associateIpAddress() {
         });
     }
     else {
+        logger.info(`${PRIMARY_STATE} device already has virtual IP address. Association is not required.`);
         deferred.resolve();
     }
     return deferred.promise;
@@ -335,11 +336,8 @@ function init() {
     ])
     .then((data) => {
         curIidData = data[0];
-        console.log("Access Key: ", data[1].accessKey);
-        console.log("Secret Key: ", data[1].secretKey);
         AWS.config.update({region: curIidData.region});
         ec2 = new AWS.EC2({apiVersion: '2016-11-15'});
-        initialized = true;
         deferred.resolve();
     })
     .catch((err) => {
@@ -356,15 +354,14 @@ function init() {
 function failover() {
     init()
     .then(() => {
-        return getTagInfo(TAG_KEY, TAG_VALUE);
+        return getTagInfo();
     })
     .then ((tagData) => {
         logger.info("Create tag If neccessary");
         return addTag(tagData);
     })
-    .then((createdTag) => {
-        logger.info("Tag added successfully", createdTag.Tags[0]);
-        return getNetworkAddresses(curIidData.instanceId, PeerInstanceId);
+    .then(() => {
+        return getNetworkAddresses(curIidData.instanceId);
     })
     .then(()=>{
         return disassociateIpAddress();
@@ -378,20 +375,22 @@ function failover() {
 }
 
 /** 
- * Test failover
+ * Main processing
  */
-function test_failover() {
-    isPrimaryInstance()
-    .then(() => {
-        return init();
-    })
-    .then(() => {
-        return getTagInfo(TAG_KEY, TAG_VALUE);
+function main() {
+    getFailoverStatus()
+    .then((status) => {
+        if (status == PRIMARY_STATE) {
+            return failover();
+        }
+        else {
+            logger.info(`No need to perform failover for ${SECONDARY_STATE} device`);
+            return q();
+        }
     })
     .catch(error => {
-        console.log("Failover failed", error);
+        logger.error(`Failover failed: ${error}`);
     })
 }
 
-test_failover();
-// failover();
+main();
