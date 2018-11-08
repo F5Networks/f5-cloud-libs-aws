@@ -36,7 +36,6 @@ parser
     .option('--vip-allocation-id [type]', 'Specify the Allocation ID of the Virtual IP address', '')
     .option('--private-ip [type]', 'Specify the Private IP address to associate with', '')
     .option('--associate-eni [type]', 'Specify the ENI of the network interface to associate with', '')
-    .option('--peer-instance-id [type]', 'Specify instance ID of the peer instance', '')
     .option('--password-uri [type]', 'Specify URI password of the BIG-IQ', '')
     .parse(process.argv);
 const loggerOptions = {logLevel: parser.logLevel, fileName: parser.logFile, console: true};
@@ -52,14 +51,12 @@ const TAG_KEY = parser.tagKey;
 let TAG_VALUE = parser.tagValue;
 let AllocationEipID = parser.vipAllocationId;
 let PrivateIpAddressToAssociate = parser.privateIp;
-let PeerInstanceId = parser.peerInstanceId;
 let passwordUri = parser.passwordUri;
 
 let networkInterfaceIdIdToAssociate = parser.associateEni;
 let associationIdToDisassociate;
 let allocationIdToAssociate;
 
-let NetworkAddresses = [];
 let ec2;
 let curIidData;
 let associateRequired = false;
@@ -241,13 +238,7 @@ function getNetworkAddresses(curInstanceId)
         deferred.reject(err);
     }
     else {
-        for (let value of data["Addresses"]) {
-            var instanceId = value.InstanceId;
-            if (instanceId != undefined && (instanceId == curInstanceId || instanceId == PeerInstanceId)) {
-                NetworkAddresses.push(value);
-            }
-        }
-        for (let addr of NetworkAddresses) {
+        for (let addr of data["Addresses"]) {
             var tag = addr.Tags;
             if ((tag != undefined) && (tag.length == 1) && (tag[0].Key == TAG_KEY) && (tag[0].Value == TAG_VALUE)) {
                 if (curInstanceId != addr.InstanceId)
@@ -255,6 +246,7 @@ function getNetworkAddresses(curInstanceId)
                     associationIdToDisassociate = addr.AssociationId;
                     allocationIdToAssociate = addr.AllocationId;
                     associateRequired = true;
+                    break;
                 }
             }
         }
