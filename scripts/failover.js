@@ -74,7 +74,7 @@ function getFailoverStatus() {
             bigIqPasswordData = util.lowerCaseKeys(
                 JSON.parse(uriData.trim())
             );
-            bigip.init(
+            return bigip.init(
                 'localhost',
                 'admin',
                 bigIqPasswordData.admin,
@@ -84,17 +84,15 @@ function getFailoverStatus() {
             );
         })
         .then(() => {
-            return q.all([
-                bigip.list('/shared/failover-state')
-            ]);
+            return bigip.list('/shared/failover-state');
         })
         .then((results) => {
-            if (Array.isArray(results) && (results.length > 0)) {
-                const failoverStatus = results[0].nodeRole;
+            if (results !== undefined) {
+                const failoverStatus = results.nodeRole;
                 deferred.resolve(failoverStatus);
             } else {
                 logger.error('Fail to retrieve failover-status');
-                deferred.reject();
+                deferred.reject(results);
             }
         })
         .catch((err) => {
@@ -106,8 +104,6 @@ function getFailoverStatus() {
 
 /**
  * Config AWS
- *
- * @param {String} reg - Region to deploy Azure ARM
  *
  * @return {Promise} A promise which is resolved upon AWS configuration completion
  */
@@ -182,7 +178,7 @@ function getTagInfo() {
 /**
  * Tag an Elastic IP address if needed
  *
- * @param {Array} tagData - retrieved tag information
+ * @param {Object} tagData - retrieved tag information
  *
  * @return {Promise} A promise which is resolved upon matching tag is retrieved or added
  *
@@ -191,7 +187,7 @@ function addTag(tagData) {
     const deferred = q.defer();
     const numTags = Object.keys(tagData.Tags).length;
     if (numTags === 0) {
-        logger.info('Tag not found, need to tag resource');
+        logger.info(`Tag ${tagKey} not found. Creating tag on resource ${allocationEipId}`);
         const createTagParams = {
             Resources: [
                 allocationEipId
@@ -216,8 +212,9 @@ function addTag(tagData) {
         logger.info('Tag found, no need add tag');
         deferred.resolve(tagData);
     } else {
-        logger.error('Error: multiple tags');
-        deferred.reject(tagData.Tags);
+        const errorMessage = `Error: multiple tags: ${tagData.Tags}`;
+        logger.error(errorMessage);
+        deferred.reject(errorMessage);
     }
     return deferred.promise;
 }
@@ -232,6 +229,10 @@ function getNetworkAddresses(curInstanceId) {
             {
                 Name: 'domain',
                 Values: ['vpc']
+            },
+            {
+                Name: `tag:${tagKey}`,
+                Values: [tagValue]
             }
         ]
     };
@@ -241,15 +242,13 @@ function getNetworkAddresses(curInstanceId) {
             logger.error(`Error getting network addresses: ${err.stack}`);
             deferred.reject(err);
         } else {
-            const matchedAddress = data.Addresses.filter((addr) => {
-                const tag = addr.Tags;
-                return ((tag !== undefined) && (tag.length === 1) && (tag[0].Key === tagKey) &&
-                (tag[0].Value === tagValue));
-            });
-            if (curInstanceId !== matchedAddress[0].InstanceId) {
-                associationIdToDisassociate = matchedAddress[0].AssociationId;
-                allocationIdToAssociate = matchedAddress[0].AllocationId;
-                associateRequired = true;
+            const matchedAddress = data.Addresses;
+            if (Array.isArray(matchedAddress) && (matchedAddress.length === 1)) {
+                if (curInstanceId !== matchedAddress[0].InstanceId) {
+                    associationIdToDisassociate = matchedAddress[0].AssociationId;
+                    allocationIdToAssociate = matchedAddress[0].AllocationId;
+                    associateRequired = true;
+                }
             }
             deferred.resolve();
         }
