@@ -91,8 +91,9 @@ function getFailoverStatus() {
                 const failoverStatus = results.nodeRole;
                 deferred.resolve(failoverStatus);
             } else {
-                logger.error('Fail to retrieve failover-status');
-                deferred.reject(results);
+                const errorMessage = 'Fail to retrieve failover-status';
+                logger.error(errorMessage);
+                deferred.reject(new Error(errorMessage));
             }
         })
         .catch((err) => {
@@ -214,7 +215,7 @@ function addTag(tagData) {
     } else {
         const errorMessage = `Error: multiple tags: ${tagData.Tags}`;
         logger.error(errorMessage);
-        deferred.reject(errorMessage);
+        deferred.reject(new Error(errorMessage));
     }
     return deferred.promise;
 }
@@ -249,8 +250,12 @@ function getNetworkAddresses(curInstanceId) {
                     allocationIdToAssociate = matchedAddress[0].AllocationId;
                     associateRequired = true;
                 }
+                deferred.resolve();
+            } else {
+                const errorMessage = `Error: No network address associated with tag ${tagKey}`;
+                logger.error(errorMessage);
+                deferred.reject(new Error(errorMessage));
             }
-            deferred.resolve();
         }
     });
     return deferred.promise;
