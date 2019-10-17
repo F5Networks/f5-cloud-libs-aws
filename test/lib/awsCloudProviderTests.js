@@ -532,6 +532,41 @@ module.exports = {
         }
     },
 
+    testDeleteStoredUcs: {
+        setUp(callback) {
+            provider.s3 = {
+                deleteObjects: function() {
+                    return {
+                        promise() {
+                            const deferred = q.defer();
+                            deferred.resolve();
+                            return deferred.promise;
+                        }
+                    };
+                }
+            };
+            provider.providerOptions = {
+                s3Bucket: 'foo'
+            };
+            callback();
+        },
+        testExists(test) {
+            provider.deleteStoredUcs('foo.ucs')
+                .then((response) => {
+                    test.ok(true);
+                    test.strictEqual(response.status, 'OK');
+                    test.notStrictEqual(response.message
+                        .indexOf('The following items were successfully deleted'), -1);
+                })
+                .catch((err) => {
+                    test.ok(false, err.message);
+                })
+                .finally(() => {
+                    test.done();
+                });
+        }
+    },
+
     testGetInstances: {
         setUp(callback) {
             provider.providerOptions = providerOptions;
