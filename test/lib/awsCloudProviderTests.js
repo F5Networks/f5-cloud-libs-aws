@@ -650,7 +650,7 @@ module.exports = {
                     let data;
                     let deferred;
                     instance1 = {
-                        isMaster: false,
+                        isMaster: true,
                         hostname: 'hostname1',
                         mgmtIp: '1.2.3.4',
                         privateIp: '1.2.3.4',
@@ -890,7 +890,7 @@ module.exports = {
                 getObject(params) {
                     let data;
                     instance1 = {
-                        isMaster: false,
+                        isMaster: true,
                         hostname: 'hostname1',
                         mgmtIp: '111.112.113.114',
                         privateIp: '111.112.113.114',
@@ -921,7 +921,7 @@ module.exports = {
             };
 
             test.expect(2);
-            provider.getInstances({ externalTag })
+            provider.getInstances({ externalTag, instanceId: 'id1' })
                 .then((returnedInstances) => {
                     test.strictEqual(returnedInstances['111'].external, true);
                     test.deepEqual(
@@ -942,7 +942,7 @@ module.exports = {
 
         testNonMastersDeleted(test) {
             test.expect(3);
-            provider.getInstances()
+            provider.getInstances({ instanceId: 'id1' })
                 .then(() => {
                     test.strictEqual(deletedInstances.length, 2);
                     test.strictEqual(deletedInstances[0], 'instances/goneMissing');
