@@ -650,7 +650,7 @@ module.exports = {
                     let data;
                     let deferred;
                     instance1 = {
-                        isMaster: true,
+                        isPrimary: true,
                         hostname: 'hostname1',
                         mgmtIp: '1.2.3.4',
                         privateIp: '1.2.3.4',
@@ -661,7 +661,7 @@ module.exports = {
                         providerVisible: true
                     };
                     instance2 = {
-                        isMaster: false,
+                        isPrimary: false,
                         hostname: 'hostname2',
                         mgmtIp: '5.6.7.8',
                         privateIp: '5.6.7.8',
@@ -812,7 +812,7 @@ module.exports = {
 
             provider.getInstances()
                 .then((returnedInstances) => {
-                    test.strictEqual(returnedInstances.id3.isMaster, false);
+                    test.strictEqual(returnedInstances.id3.isPrimary, false);
                     test.strictEqual(returnedInstances.id3.mgmtIp, '7.8.9.0');
                     test.strictEqual(returnedInstances.id3.privateIp, '7.8.9.0');
                     test.strictEqual(returnedInstances.id3.publicIp, '111.222.333.444');
@@ -890,7 +890,7 @@ module.exports = {
                 getObject(params) {
                     let data;
                     instance1 = {
-                        isMaster: true,
+                        isPrimary: true,
                         hostname: 'hostname1',
                         mgmtIp: '111.112.113.114',
                         privateIp: '111.112.113.114',
@@ -940,7 +940,7 @@ module.exports = {
                 });
         },
 
-        testNonMastersDeleted(test) {
+        testNonPrimariesDeleted(test) {
             test.expect(3);
             provider.getInstances({ instanceId: 'id1' })
                 .then(() => {
@@ -1234,7 +1234,7 @@ module.exports = {
         }
     },
 
-    testElectMaster: {
+    testElectPrimary: {
         setUp(callback) {
             provider.instanceIdToLaunchConfigMap = {};
             provider.instanceIdToAutoscaleGroupMap = {};
@@ -1243,7 +1243,7 @@ module.exports = {
         },
 
         testBasic(test) {
-            const possibleMasterInstances = {
+            const possiblePrimaryInstances = {
                 id1: {
                     privateIp: '1.2.3.4',
                     versionOk: true,
@@ -1257,9 +1257,9 @@ module.exports = {
             };
 
             test.expect(1);
-            provider.electMaster(possibleMasterInstances)
-                .then((electedMasterId) => {
-                    test.strictEqual(electedMasterId, 'id1');
+            provider.electPrimary(possiblePrimaryInstances)
+                .then((electedPrimaryId) => {
+                    test.strictEqual(electedPrimaryId, 'id1');
                 })
                 .catch((err) => {
                     test.ok(false, err.message);
@@ -1270,7 +1270,7 @@ module.exports = {
         },
 
         testProviderNotVisible(test) {
-            const possibleMasterInstances = {
+            const possiblePrimaryInstances = {
                 id1: {
                     privateIp: '1.2.3.4',
                     versionOk: true,
@@ -1284,9 +1284,9 @@ module.exports = {
             };
 
             test.expect(1);
-            provider.electMaster(possibleMasterInstances)
-                .then((electedMasterId) => {
-                    test.strictEqual(electedMasterId, 'id2');
+            provider.electPrimary(possiblePrimaryInstances)
+                .then((electedPrimaryId) => {
+                    test.strictEqual(electedPrimaryId, 'id2');
                 })
                 .catch((err) => {
                     test.ok(false, err.message);
@@ -1297,7 +1297,7 @@ module.exports = {
         },
 
         testLaunchConfigName(test) {
-            const possibleMasterInstances = {
+            const possiblePrimaryInstances = {
                 id1: {
                     privateIp: '1.2.3.4',
                     versionOk: true,
@@ -1325,9 +1325,9 @@ module.exports = {
             };
 
             test.expect(1);
-            provider.electMaster(possibleMasterInstances)
-                .then((electedMasterId) => {
-                    test.strictEqual(electedMasterId, 'id2');
+            provider.electPrimary(possiblePrimaryInstances)
+                .then((electedPrimaryId) => {
+                    test.strictEqual(electedPrimaryId, 'id2');
                 })
                 .catch((err) => {
                     test.ok(false, err.message);
@@ -1338,7 +1338,7 @@ module.exports = {
         },
 
         testExternal(test) {
-            const possibleMasterInstances = {
+            const possiblePrimaryInstances = {
                 id1: {
                     privateIp: '1.2.3.4',
                     versionOk: true,
@@ -1359,9 +1359,9 @@ module.exports = {
             };
 
             test.expect(1);
-            provider.electMaster(possibleMasterInstances)
-                .then((electedMasterId) => {
-                    test.strictEqual(electedMasterId, 'id3');
+            provider.electPrimary(possiblePrimaryInstances)
+                .then((electedPrimaryId) => {
+                    test.strictEqual(electedPrimaryId, 'id3');
                 })
                 .catch((err) => {
                     test.ok(false, err.message);
@@ -1372,7 +1372,7 @@ module.exports = {
         },
 
         testVersionOk(test) {
-            const possibleMasterInstances = {
+            const possiblePrimaryInstances = {
                 id1: {
                     privateIp: '1.2.3.4',
                     versionOk: true,
@@ -1391,9 +1391,9 @@ module.exports = {
             };
 
             test.expect(1);
-            provider.electMaster(possibleMasterInstances)
-                .then((electedMasterId) => {
-                    test.strictEqual(electedMasterId, 'id1');
+            provider.electPrimary(possiblePrimaryInstances)
+                .then((electedPrimaryId) => {
+                    test.strictEqual(electedPrimaryId, 'id1');
                 })
                 .catch((err) => {
                     test.ok(false, err.message);
@@ -1404,16 +1404,16 @@ module.exports = {
         }
     },
 
-    testIsValidMaster: {
+    testIsValidPrimary: {
         setUp(callback) {
             instance1 = {
-                isMaster: false,
+                isPrimary: false,
                 hostname: 'hostname1',
                 mgmtIp: '1.2.3.4',
                 privateIp: '1.2.3.4'
             };
             instance2 = {
-                isMaster: false,
+                isPrimary: false,
                 hostname: 'hostname2',
                 mgmtIp: '5.6.7.8',
                 privateIp: '5.6.7.8'
@@ -1438,11 +1438,11 @@ module.exports = {
             callback();
         },
 
-        testIsMaster(test) {
+        testIsPrimary(test) {
             provider.nodeProperties.instanceId = instanceId;
 
             test.expect(1);
-            provider.isValidMaster(instanceId, instances)
+            provider.isValidPrimary(instanceId, instances)
                 .then((isValid) => {
                     test.ok(isValid);
                 })
@@ -1464,7 +1464,7 @@ module.exports = {
             };
 
             test.expect(1);
-            provider.isValidMaster(instanceId, instances)
+            provider.isValidPrimary(instanceId, instances)
                 .then((isValid) => {
                     test.ok(isValid);
                 })
@@ -1477,7 +1477,7 @@ module.exports = {
         }
     },
 
-    testMasterElected: {
+    testPrimaryElected: {
         setUp(callback) {
             provider.nodeProperties = { instanceId };
             instanceProtectionParams = undefined;
@@ -1514,9 +1514,9 @@ module.exports = {
             callback();
         },
 
-        testInstanceProtectionSetWhenMaster(test) {
+        testInstanceProtectionSetWhenPrimary(test) {
             test.expect(3);
-            provider.masterElected(instanceId)
+            provider.primaryElected(instanceId)
                 .then(() => {
                     test.strictEqual(instanceProtectionParams.InstanceIds.length, 1);
                     test.strictEqual(instanceProtectionParams.InstanceIds[0], instanceId);
@@ -1530,9 +1530,9 @@ module.exports = {
                 });
         },
 
-        testInstanceProtectionNotSetWhenNotMaster(test) {
+        testInstanceProtectionNotSetWhenNotPrimary(test) {
             test.expect(1);
-            provider.masterElected('foo')
+            provider.primaryElected('foo')
                 .then(() => {
                     test.strictEqual(instanceProtectionParams, undefined);
                 })
@@ -1544,7 +1544,7 @@ module.exports = {
                 });
         },
 
-        testOtherMastersSetToNonMaster(test) {
+        testOtherPrimariesSetToNonPrimary(test) {
             let instancePut;
             let instancePutId;
 
@@ -1557,7 +1557,7 @@ module.exports = {
                                 Contents: [
                                     {
                                         Key: 'instances/5678',
-                                        isMaster: true
+                                        isPrimary: true
                                     }
                                 ]
                             }
@@ -1571,7 +1571,7 @@ module.exports = {
                         return q(
                             {
                                 Body: JSON.stringify({
-                                    isMaster: true
+                                    isPrimary: true
                                 })
                             }
                         );
@@ -1586,10 +1586,10 @@ module.exports = {
             };
 
             test.expect(2);
-            provider.masterElected(instanceId)
+            provider.primaryElected(instanceId)
                 .then(() => {
                     test.strictEqual(instancePutId, '5678');
-                    test.strictEqual(instancePut.isMaster, false);
+                    test.strictEqual(instancePut.isPrimary, false);
                 })
                 .catch((err) => {
                     test.ok(false, err.message);
@@ -1599,7 +1599,7 @@ module.exports = {
                 });
         }
     },
-    testTagMaster: {
+    testTagPrimary: {
         setUp(callback) {
             provider.ec2 = {
                 describeTags(params) {
@@ -1632,7 +1632,7 @@ module.exports = {
             callback();
         },
 
-        testTagMasterWithStackName(test) {
+        testTagPrimaryWithStackName(test) {
             describeTagsResults = {
                 Tags:
                     [{
@@ -1656,14 +1656,14 @@ module.exports = {
                 }
             };
 
-            const masterId = '1234';
+            const primaryId = '1234';
 
             const expectedDeleteTagsRequest = [
                 {
                     Resources: ['5678'],
                     Tags: [
                         {
-                            Key: 'StackName-master',
+                            Key: 'StackName-primary',
                             Value: 'true'
                         }
                     ]
@@ -1672,7 +1672,7 @@ module.exports = {
                     Resources: ['9012'],
                     Tags: [
                         {
-                            Key: 'StackName-master',
+                            Key: 'StackName-primary',
                             Value: 'true'
                         }
                     ]
@@ -1680,15 +1680,15 @@ module.exports = {
             ];
 
             test.expect(4);
-            provider.tagMasterInstance(masterId, clusterInstances)
+            provider.tagPrimaryInstance(primaryId, clusterInstances)
                 .then(() => {
-                    test.strictEqual(passedDescribeTagsParams.Filters[0].Values[0], masterId);
+                    test.strictEqual(passedDescribeTagsParams.Filters[0].Values[0], primaryId);
                     test.deepEqual(passedCreateTagsParams,
                         {
                             Resources: ['1234'],
                             Tags: [
                                 {
-                                    Key: 'StackName-master',
+                                    Key: 'StackName-primary',
                                     Value: 'true'
                                 }
                             ]
@@ -1704,7 +1704,7 @@ module.exports = {
                 });
         },
 
-        testTagMasterSingleInstance(test) {
+        testTagPrimarySingleInstance(test) {
             describeTagsResults = {
                 Tags:
                     [{
@@ -1722,10 +1722,10 @@ module.exports = {
                 }
             };
 
-            const masterId = '1234';
+            const primaryId = '1234';
 
             test.expect(1);
-            provider.tagMasterInstance(masterId, clusterInstances)
+            provider.tagPrimaryInstance(primaryId, clusterInstances)
                 .then(() => {
                     test.strictEqual(deleteTagRequests.length, 0);
                 })
