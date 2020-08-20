@@ -31,7 +31,7 @@ const cloudProviderFactory = f5CloudLibs.cloudProviderFactory;
     const runner = {
         run(argv) {
             const loggerOptions = {};
-            const DEFAULT_LOG_FILE = '/var/log/cloudlibs/verifyDeploymentCompletion.log';
+            const DEFAULT_LOG_FILE = '/var/log/cloud/aws/verifyDeploymentCompletion.log';
             options
                 .version('1.0.0')
                 .option(
