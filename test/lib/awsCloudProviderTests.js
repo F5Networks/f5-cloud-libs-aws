@@ -16,55 +16,56 @@
 
 'use strict';
 
+const assert = require('assert');
 process.env.NODE_PATH = `${__dirname}/../../../`;
 require('module').Module._initPaths(); // eslint-disable-line no-underscore-dangle
 
 const AutoscaleInstance = require('@f5devcentral/f5-cloud-libs').autoscaleInstance;
 
-let q;
-let fsMock;
-let awsMock;
-let AwsCloudProvider;
-let bigIpMock;
-let utilMock;
-let provider;
+describe('aws cloud provider tests', () => {
+    let q;
+    let fsMock;
+    let awsMock;
+    let AwsCloudProvider;
+    let bigIpMock;
+    let utilMock;
+    let provider;
 
-const providerOptions = {
-    s3Bucket: 'foo',
-    sqsUrl: 'bar'
-};
+    const providerOptions = {
+        s3Bucket: 'foo',
+        sqsUrl: 'bar'
+    };
 
-const user = 'foo';
-const password = 'bar';
-const instanceId = '1234';
+    const user = 'foo';
+    const password = 'bar';
+    const instanceId = '1234';
 
-let fsReadFile;
-let fsStat;
+    let fsReadFile;
+    let fsStat;
 
-let iidDoc;
-let instances;
-let instance1;
-let instance2;
+    let iidDoc;
+    let instances;
+    let instance1;
+    let instance2;
 
-let deletedInstances;
+    let deletedInstances;
 
-let getObjectParams;
-let instanceProtectionParams;
+    let getObjectParams;
+    let instanceProtectionParams;
 
-let passedCreateTagsParams;
-let deleteTagRequests;
-let passedDescribeTagsParams;
-let describeTagsResults;
+    let passedCreateTagsParams;
+    let deleteTagRequests;
+    let passedDescribeTagsParams;
+    let describeTagsResults;
 
-let passedSignalResourceParams;
+    let passedSignalResourceParams;
 
-const INSTANCES_FOLDER = 'instances/';
+    const INSTANCES_FOLDER = 'instances/';
 
-// Our tests cause too many event listeners. Turn off the check.
-process.setMaxListeners(0);
+    // Our tests cause too many event listeners. Turn off the check.
+    process.setMaxListeners(0);
 
-module.exports = {
-    setUp(callback) {
+    beforeEach(() => {
         /* eslint-disable global-require */
         q = require('q');
         fsMock = require('fs');
@@ -98,28 +99,24 @@ module.exports = {
         utilMock.DEFAULT_RETRY = utilMock.NO_RETRY;
         utilMock.SHORT_RETRY = utilMock.NO_RETRY;
         utilMock.MEDIUM_RETRY = utilMock.NO_RETRY;
+    });
 
-        callback();
-    },
-
-    tearDown(callback) {
+    afterEach(() => {
         fsMock.readFile = fsReadFile;
         fsMock.stat = fsStat;
 
         Object.keys(require.cache).forEach((key) => {
             delete require.cache[key];
         });
-        callback();
-    },
+    });
 
-    testFeatures(test) {
-        test.expect(1);
-        test.ok(provider.features.FEATURE_MESSAGING);
-        test.done();
-    },
+    it('features test', (done) => {
+        assert.ok(provider.features.FEATURE_MESSAGING);
+        done();
+    });
 
-    testInit: {
-        setUp(callback) {
+    describe('init tests', () => {
+        beforeEach(() => {
             iidDoc = '{}';
 
             awsMock.AutoScaling.prototype.describeAutoScalingInstances =
@@ -179,11 +176,9 @@ module.exports = {
             fsMock.stat = function stat(filename, cb) {
                 cb(null);
             };
-
-            callback();
-        },
-
-        testGetIidDoc(test) {
+        });
+        
+        it('get Iid doc test', (done) => {
             iidDoc = {
                 privateIp: '1.2.3.4',
                 instanceId: 'myInstanceId',
@@ -191,43 +186,41 @@ module.exports = {
             };
             iidDoc = JSON.stringify(iidDoc);
 
-            test.expect(4);
             provider.init(providerOptions)
                 .then(() => {
-                    test.strictEqual(provider.nodeProperties.mgmtIp, '1.2.3.4');
-                    test.strictEqual(provider.nodeProperties.privateIp, '1.2.3.4');
-                    test.strictEqual(provider.nodeProperties.instanceId, 'myInstanceId');
-                    test.strictEqual(provider.nodeProperties.region, 'myRegion');
+                    assert.strictEqual(provider.nodeProperties.mgmtIp, '1.2.3.4');
+                    assert.strictEqual(provider.nodeProperties.privateIp, '1.2.3.4');
+                    assert.strictEqual(provider.nodeProperties.instanceId, 'myInstanceId');
+                    assert.strictEqual(provider.nodeProperties.region, 'myRegion');
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testSetRegion(test) {
+        it('set region test', (done) => {
             iidDoc = {
                 region: 'myRegion'
             };
             iidDoc = JSON.stringify(iidDoc);
 
-            test.expect(1);
             provider.init(providerOptions)
                 .then(() => {
-                    test.strictEqual(awsMock.config.configUpdate.region, 'myRegion');
+                    assert.strictEqual(awsMock.config.configUpdate.region, 'myRegion');
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testCreateBucket: {
-            setUp(callback) {
+        describe('create bucket tests', () => {
+            beforeEach(() => {
                 awsMock.S3.prototype.listObjectsV2 = function listObjectsV2() {
                     return {
                         promise() {
@@ -236,10 +229,9 @@ module.exports = {
                     };
                 };
                 providerOptions.region = 'foo';
-                callback();
-            },
+            });
 
-            testCreated(test) {
+            it('created test', (done) => {
                 let putParams;
                 awsMock.S3.prototype.putObject = function putObject(params) {
                     putParams = params;
@@ -250,20 +242,19 @@ module.exports = {
                     };
                 };
 
-                test.expect(1);
                 provider.init(providerOptions)
                     .then(() => {
-                        test.strictEqual(putParams.Key, 'backup/');
+                        assert.strictEqual(putParams.Key, 'backup/');
                     })
                     .catch((err) => {
-                        test.ok(false, err.message);
+                        assert.ok(false, err.message);
                     })
                     .finally(() => {
-                        test.done();
+                        done();
                     });
-            },
+            });
 
-            testListObjectsError(test) {
+            it('list objects error test', (done) => {
                 const errorMessage = 'foobar';
                 awsMock.S3.prototype.listObjectsV2 = function listObjectsV2() {
                     return {
@@ -273,20 +264,19 @@ module.exports = {
                     };
                 };
 
-                test.expect(1);
                 provider.init(providerOptions)
                     .then(() => {
-                        test.ok(false, 'Should have had list objects error');
+                        assert.ok(false, 'Should have had list objects error');
                     })
                     .catch((err) => {
-                        test.notStrictEqual(err.message.indexOf(errorMessage), -1);
+                        assert.notStrictEqual(err.message.indexOf(errorMessage), -1);
                     })
                     .finally(() => {
-                        test.done();
+                        done();
                     });
-            },
+            });
 
-            testPutObjectError(test) {
+            it('put object error test', (done) => {
                 const errorMessage = 'foobar';
                 awsMock.S3.prototype.putObject = function putObject() {
                     return {
@@ -296,22 +286,21 @@ module.exports = {
                     };
                 };
 
-                test.expect(1);
                 provider.init(providerOptions)
                     .then(() => {
-                        test.ok(false, 'Should have had list objects error');
+                        assert.ok(false, 'Should have had list objects error');
                     })
                     .catch((err) => {
-                        test.notStrictEqual(err.message.indexOf(errorMessage), -1);
+                        assert.notStrictEqual(err.message.indexOf(errorMessage), -1);
                     })
                     .finally(() => {
-                        test.done();
+                        done();
                     });
-            }
-        },
+            });
+        });
 
-        testAutoscale: {
-            testInstanceMaps(test) {
+        describe('autoscale tests', () => {
+            it('instance maps test', (done) => {
                 const nextToken = 'this is the next token';
 
                 const g1Instances = [
@@ -378,10 +367,9 @@ module.exports = {
                         cb(null, data);
                     };
 
-                test.expect(3);
                 provider.init(providerOptions, { autoscale: true })
                     .then(() => {
-                        test.deepEqual(
+                        assert.deepEqual(
                             provider.instanceIdToAutoscaleGroupMap,
                             {
                                 g1id1: 'group1',
@@ -391,7 +379,7 @@ module.exports = {
                             }
 
                         );
-                        test.deepEqual(
+                        assert.deepEqual(
                             provider.instanceIdToLaunchConfigMap,
                             {
                                 g1id1: 'launchConfig1',
@@ -401,7 +389,7 @@ module.exports = {
                             }
                         );
 
-                        test.deepEqual(
+                        assert.deepEqual(
                             provider.stackIdToInstanceMap,
                             {
                                 stack1: g1Instances,
@@ -410,17 +398,17 @@ module.exports = {
                         );
                     })
                     .catch((err) => {
-                        test.ok(false, err.message);
+                        assert.ok(false, err.message);
                     })
                     .finally(() => {
-                        test.done();
+                        done();
                     });
-            }
-        }
-    },
+            });
+        });
+    });
 
-    testGetDataFromUri: {
-        setUp(callback) {
+    describe('get data from uri tests', () => {
+        beforeEach(() => {
             provider.s3 = {
                 getObject(params) {
                     getObjectParams = params;
@@ -436,104 +424,97 @@ module.exports = {
             };
 
             getObjectParams = undefined;
-            callback();
-        },
+        });
 
-        testBasic(test) {
-            test.expect(3);
+        it('basic test', (done) => {
             provider.getDataFromUri('arn:aws:s3:::myBucket/myKey')
                 .then((data) => {
-                    test.strictEqual(getObjectParams.Bucket, 'myBucket');
-                    test.strictEqual(getObjectParams.Key, 'myKey');
-                    test.strictEqual(data, 'bucket data');
+                    assert.strictEqual(getObjectParams.Bucket, 'myBucket');
+                    assert.strictEqual(getObjectParams.Key, 'myKey');
+                    assert.strictEqual(data, 'bucket data');
                 })
                 .catch((err) => {
-                    test.ok(false, err);
+                    assert.ok(false, err);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testCn(test) {
-            test.expect(3);
+        it('cn test', (done) => {
             provider.getDataFromUri('arn:aws-cn:s3:::myBucket/myKey')
                 .then((data) => {
-                    test.strictEqual(getObjectParams.Bucket, 'myBucket');
-                    test.strictEqual(getObjectParams.Key, 'myKey');
-                    test.strictEqual(data, 'bucket data');
+                    assert.strictEqual(getObjectParams.Bucket, 'myBucket');
+                    assert.strictEqual(getObjectParams.Key, 'myKey');
+                    assert.strictEqual(data, 'bucket data');
                 })
                 .catch((err) => {
-                    test.ok(false, err);
+                    assert.ok(false, err);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testUsGov(test) {
-            test.expect(3);
+        it('us gov test', (done) => {
             provider.getDataFromUri('arn:aws-us-gov:s3:::myBucket/myKey')
                 .then((data) => {
-                    test.strictEqual(getObjectParams.Bucket, 'myBucket');
-                    test.strictEqual(getObjectParams.Key, 'myKey');
-                    test.strictEqual(data, 'bucket data');
+                    assert.strictEqual(getObjectParams.Bucket, 'myBucket');
+                    assert.strictEqual(getObjectParams.Key, 'myKey');
+                    assert.strictEqual(data, 'bucket data');
                 })
                 .catch((err) => {
-                    test.ok(false, err);
+                    assert.ok(false, err);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testComplexKey(test) {
-            test.expect(3);
+        it('complex key test', (done) => {
             provider.getDataFromUri('arn:aws:s3:::myBucket/myFolder/myKey')
                 .then((data) => {
-                    test.strictEqual(getObjectParams.Bucket, 'myBucket');
-                    test.strictEqual(getObjectParams.Key, 'myFolder/myKey');
-                    test.strictEqual(data, 'bucket data');
+                    assert.strictEqual(getObjectParams.Bucket, 'myBucket');
+                    assert.strictEqual(getObjectParams.Key, 'myFolder/myKey');
+                    assert.strictEqual(data, 'bucket data');
                 })
                 .catch((err) => {
-                    test.ok(false, err);
+                    assert.ok(false, err);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testInvalidUri(test) {
-            test.expect(1);
+        it('invalid uri test', (done) => {
             provider.getDataFromUri('https://aws.s3.com/myBucket/myKey')
                 .then(() => {
-                    test.ok(false, 'Should have thrown invalid URI');
+                    assert.ok(false, 'Should have thrown invalid URI');
                 })
                 .catch((err) => {
-                    test.notStrictEqual(err.message.indexOf('Invalid URI'), -1);
+                    assert.notStrictEqual(err.message.indexOf('Invalid URI'), -1);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testInvalidArn(test) {
-            test.expect(1);
+        it('invalid arn test', (done) => {
             provider.getDataFromUri('arn:aws:s3:::foo/')
                 .then(() => {
-                    test.ok(false, 'Should have thrown invalid ARN');
+                    assert.ok(false, 'Should have thrown invalid ARN');
                 })
                 .catch((err) => {
-                    test.notStrictEqual(err.message.indexOf('Invalid ARN'), -1);
+                    assert.notStrictEqual(err.message.indexOf('Invalid ARN'), -1);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        }
-    },
+        });
+    });
 
-    testDeleteStoredUcs: {
-        setUp(callback) {
+    describe('delete stored ucs tests', () => {
+        beforeEach(() => {
             provider.s3 = {
                 deleteObjects: function() {
                     return {
@@ -548,27 +529,27 @@ module.exports = {
             provider.providerOptions = {
                 s3Bucket: 'foo'
             };
-            callback();
-        },
-        testExists(test) {
+        });
+
+        it('exists test', (done) => {
             provider.deleteStoredUcs('foo.ucs')
                 .then((response) => {
-                    test.ok(true);
-                    test.strictEqual(response.status, 'OK');
-                    test.notStrictEqual(response.message
+                    assert.ok(true);
+                    assert.strictEqual(response.status, 'OK');
+                    assert.notStrictEqual(response.message
                         .indexOf('The following items were successfully deleted'), -1);
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        }
-    },
+        });
+    });
 
-    testGetInstances: {
-        setUp(callback) {
+    describe('get instances tests', () => {
+        beforeEach(() => {
             provider.providerOptions = providerOptions;
             provider.initOptions = {};
             provider.instanceIdToLaunchConfigMap = {};
@@ -727,30 +708,27 @@ module.exports = {
             };
 
             deletedInstances = [];
+        });
 
-            callback();
-        },
-
-        testInstanceMap(test) {
-            test.expect(3);
+        it('instance map test', (done) => {
             provider.getInstances()
                 .then((returnedInstances) => {
                     const mungedInstances = returnedInstances;
                     delete mungedInstances.id1.lastUpdate;
                     delete mungedInstances.id2.lastUpdate;
-                    test.strictEqual(Object.keys(mungedInstances).length, 2);
-                    test.deepEqual(mungedInstances.id1, instance1);
-                    test.deepEqual(mungedInstances.id2, instance2);
+                    assert.strictEqual(Object.keys(mungedInstances).length, 2);
+                    assert.deepEqual(mungedInstances.id1, instance1);
+                    assert.deepEqual(mungedInstances.id2, instance2);
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testInstanceMapMissingInstanceId(test) {
+        it('instance map missing instance id test', (done) => {
             // If an instance ID is missing from the db, we should get it from
             // describe instances
             const Instances = [
@@ -812,25 +790,25 @@ module.exports = {
 
             provider.getInstances()
                 .then((returnedInstances) => {
-                    test.strictEqual(returnedInstances.id3.isPrimary, false);
-                    test.strictEqual(returnedInstances.id3.mgmtIp, '7.8.9.0');
-                    test.strictEqual(returnedInstances.id3.privateIp, '7.8.9.0');
-                    test.strictEqual(returnedInstances.id3.publicIp, '111.222.333.444');
-                    test.strictEqual(returnedInstances.id3.providerVisible, true);
-                    test.strictEqual(returnedInstances.id3.external, false);
-                    test.strictEqual(returnedInstances.id3.status, AutoscaleInstance.INSTANCE_STATUS_OK);
+                    assert.strictEqual(returnedInstances.id3.isPrimary, false);
+                    assert.strictEqual(returnedInstances.id3.mgmtIp, '7.8.9.0');
+                    assert.strictEqual(returnedInstances.id3.privateIp, '7.8.9.0');
+                    assert.strictEqual(returnedInstances.id3.publicIp, '111.222.333.444');
+                    assert.strictEqual(returnedInstances.id3.providerVisible, true);
+                    assert.strictEqual(returnedInstances.id3.external, false);
+                    assert.strictEqual(returnedInstances.id3.status, AutoscaleInstance.INSTANCE_STATUS_OK);
 
-                    test.deepEqual(returnedInstances.id2, instance2);
+                    assert.deepEqual(returnedInstances.id2, instance2);
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testInstanceMapWithExternalTag(test) {
+        it('instance map with external tag test', (done) => {
             const externalTag = {
                 key: 'foo',
                 value: 'bar'
@@ -920,11 +898,10 @@ module.exports = {
                 }
             };
 
-            test.expect(2);
             provider.getInstances({ externalTag, instanceId: 'id1' })
                 .then((returnedInstances) => {
-                    test.strictEqual(returnedInstances['111'].external, true);
-                    test.deepEqual(
+                    assert.strictEqual(returnedInstances['111'].external, true);
+                    assert.deepEqual(
                         passedParams.Filters[0],
                         {
                             Name: `tag:${externalTag.key}`,
@@ -933,32 +910,31 @@ module.exports = {
                     );
                 })
                 .catch((err) => {
-                    test.ok(false, err);
+                    assert.ok(false, err);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testNonPrimariesDeleted(test) {
-            test.expect(3);
+        it('non primaries deleted test', (done) => {
             provider.getInstances({ instanceId: 'id1' })
                 .then(() => {
-                    test.strictEqual(deletedInstances.length, 2);
-                    test.strictEqual(deletedInstances[0], 'instances/goneMissing');
-                    test.strictEqual(deletedInstances[1], 'public_keys/goneMissing');
+                    assert.strictEqual(deletedInstances.length, 2);
+                    assert.strictEqual(deletedInstances[0], 'instances/goneMissing');
+                    assert.strictEqual(deletedInstances[1], 'public_keys/goneMissing');
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        }
-    },
+        });
+    });
 
-    testGetNicsByTag: {
-        testBasic(test) {
+    describe('get nics by tag tests', () => {
+        it('basic test', (done) => {
             const myTag = {
                 key: 'foo',
                 value: 'bar'
@@ -990,42 +966,40 @@ module.exports = {
                 }
             };
 
-            test.expect(7);
             provider.getNicsByTag(myTag)
                 .then((response) => {
-                    test.strictEqual(passedParams.Filters[0].Name, `tag:${myTag.key}`);
-                    test.strictEqual(response[0].id, '1');
-                    test.strictEqual(response[0].ip.private, '1.2.3.4');
-                    test.strictEqual(response[0].ip.public, undefined);
-                    test.strictEqual(response[1].id, '2');
-                    test.strictEqual(response[1].ip.private, '2.3.4.5');
-                    test.strictEqual(response[1].ip.public, '3.4.5.6');
+                    assert.strictEqual(passedParams.Filters[0].Name, `tag:${myTag.key}`);
+                    assert.strictEqual(response[0].id, '1');
+                    assert.strictEqual(response[0].ip.private, '1.2.3.4');
+                    assert.strictEqual(response[0].ip.public, undefined);
+                    assert.strictEqual(response[1].id, '2');
+                    assert.strictEqual(response[1].ip.private, '2.3.4.5');
+                    assert.strictEqual(response[1].ip.public, '3.4.5.6');
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testBadTag(test) {
+        it('bad tag test', (done) => {
             const myTag = 'foo';
 
-            test.expect(1);
             provider.getNicsByTag(myTag)
                 .then(() => {
-                    test.ok(false, 'getNicsByTag should have thrown');
+                    assert.ok(false, 'getNicsByTag should have thrown');
                 })
                 .catch((err) => {
-                    test.notStrictEqual(err.message.indexOf('key and value'), -1);
+                    assert.notStrictEqual(err.message.indexOf('key and value'), -1);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testError(test) {
+        it('error test', (done) => {
             const myTag = {
                 key: 'foo',
                 value: 'bar'
@@ -1041,22 +1015,21 @@ module.exports = {
                 }
             };
 
-            test.expect(1);
             provider.getNicsByTag(myTag)
                 .then(() => {
-                    test.ok(false, 'getNicsByTag should have thrown');
+                    assert.ok(false, 'getNicsByTag should have thrown');
                 })
                 .catch((err) => {
-                    test.strictEqual(err.message, 'uh oh');
+                    assert.strictEqual(err.message, 'uh oh');
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        }
-    },
+        });
+    });
 
-    testGetVmsByTag: {
-        testBasic(test) {
+    describe('get vms by tag tests', () => {
+        it('basic test', (done) => {
             const myTag = {
                 key: 'foo',
                 value: 'bar'
@@ -1104,26 +1077,25 @@ module.exports = {
                 }
             };
 
-            test.expect(7);
             provider.getVmsByTag(myTag)
                 .then((response) => {
-                    test.strictEqual(passedParams.Filters[0].Name, `tag:${myTag.key}`);
-                    test.strictEqual(response.length, 2);
-                    test.strictEqual(response[0].id, '1');
-                    test.strictEqual(response[0].ip.private, '1.2.3.4');
-                    test.strictEqual(response[1].id, '2');
-                    test.strictEqual(response[1].ip.private, '2.3.4.5');
-                    test.strictEqual(response[1].ip.public, '3.4.5.6');
+                    assert.strictEqual(passedParams.Filters[0].Name, `tag:${myTag.key}`);
+                    assert.strictEqual(response.length, 2);
+                    assert.strictEqual(response[0].id, '1');
+                    assert.strictEqual(response[0].ip.private, '1.2.3.4');
+                    assert.strictEqual(response[1].id, '2');
+                    assert.strictEqual(response[1].ip.private, '2.3.4.5');
+                    assert.strictEqual(response[1].ip.public, '3.4.5.6');
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testPending(test) {
+        it('pending test', (done) => {
             const myTag = {
                 key: 'foo',
                 value: 'bar'
@@ -1171,40 +1143,38 @@ module.exports = {
                 }
             };
 
-            test.expect(5);
             provider.getVmsByTag(myTag, { includePending: true })
                 .then((response) => {
-                    test.strictEqual(passedParams.Filters[0].Name, `tag:${myTag.key}`);
-                    test.strictEqual(response.length, 3);
-                    test.strictEqual(response[2].id, '3');
-                    test.strictEqual(response[2].ip.private, '4.5.6.7');
-                    test.strictEqual(response[2].ip.public, '5.6.7.8');
+                    assert.strictEqual(passedParams.Filters[0].Name, `tag:${myTag.key}`);
+                    assert.strictEqual(response.length, 3);
+                    assert.strictEqual(response[2].id, '3');
+                    assert.strictEqual(response[2].ip.private, '4.5.6.7');
+                    assert.strictEqual(response[2].ip.public, '5.6.7.8');
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testBadTag(test) {
+        it('bad tag test', (done) => {
             const myTag = 'foo';
 
-            test.expect(1);
             provider.getVmsByTag(myTag)
                 .then(() => {
-                    test.ok(false, 'getVmsByTag should have thrown');
+                    assert.ok(false, 'getVmsByTag should have thrown');
                 })
                 .catch((err) => {
-                    test.notStrictEqual(err.message.indexOf('key and value'), -1);
+                    assert.notStrictEqual(err.message.indexOf('key and value'), -1);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testError(test) {
+        it('error test', (done) => {
             const myTag = {
                 key: 'foo',
                 value: 'bar'
@@ -1220,29 +1190,27 @@ module.exports = {
                 }
             };
 
-            test.expect(1);
             provider.getVmsByTag(myTag)
                 .then(() => {
-                    test.ok(false, 'getVmsByTag should have thrown');
+                    assert.ok(false, 'getVmsByTag should have thrown');
                 })
                 .catch((err) => {
-                    test.strictEqual(err.message, 'uh oh');
+                    assert.strictEqual(err.message, 'uh oh');
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        }
-    },
+        });
+    });
 
-    testElectPrimary: {
-        setUp(callback) {
+    describe('elect Primary tests', () => {
+        beforeEach(() => {
             provider.instanceIdToLaunchConfigMap = {};
             provider.instanceIdToAutoscaleGroupMap = {};
             provider.autoscaleGroupToLaunchConfigMap = {};
-            callback();
-        },
+        });
 
-        testBasic(test) {
+        it('basic test', (done) => {
             const possiblePrimaryInstances = {
                 id1: {
                     privateIp: '1.2.3.4',
@@ -1256,20 +1224,19 @@ module.exports = {
                 }
             };
 
-            test.expect(1);
             provider.electPrimary(possiblePrimaryInstances)
                 .then((electedPrimaryId) => {
-                    test.strictEqual(electedPrimaryId, 'id1');
+                    assert.strictEqual(electedPrimaryId, 'id1');
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testProviderNotVisible(test) {
+        it('provider not visible test', (done) => {
             const possiblePrimaryInstances = {
                 id1: {
                     privateIp: '1.2.3.4',
@@ -1283,20 +1250,19 @@ module.exports = {
                 }
             };
 
-            test.expect(1);
             provider.electPrimary(possiblePrimaryInstances)
                 .then((electedPrimaryId) => {
-                    test.strictEqual(electedPrimaryId, 'id2');
+                    assert.strictEqual(electedPrimaryId, 'id2');
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testLaunchConfigName(test) {
+        it('launch config name test', (done) => {
             const possiblePrimaryInstances = {
                 id1: {
                     privateIp: '1.2.3.4',
@@ -1324,20 +1290,19 @@ module.exports = {
                 myAsg: 'good'
             };
 
-            test.expect(1);
             provider.electPrimary(possiblePrimaryInstances)
                 .then((electedPrimaryId) => {
-                    test.strictEqual(electedPrimaryId, 'id2');
+                    assert.strictEqual(electedPrimaryId, 'id2');
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testExternal(test) {
+        it('external test', (done) => {
             const possiblePrimaryInstances = {
                 id1: {
                     privateIp: '1.2.3.4',
@@ -1358,20 +1323,19 @@ module.exports = {
                 }
             };
 
-            test.expect(1);
             provider.electPrimary(possiblePrimaryInstances)
                 .then((electedPrimaryId) => {
-                    test.strictEqual(electedPrimaryId, 'id3');
+                    assert.strictEqual(electedPrimaryId, 'id3');
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testVersionOk(test) {
+        it('version ok test', (done) => {
             const possiblePrimaryInstances = {
                 id1: {
                     privateIp: '1.2.3.4',
@@ -1390,22 +1354,21 @@ module.exports = {
                 }
             };
 
-            test.expect(1);
             provider.electPrimary(possiblePrimaryInstances)
                 .then((electedPrimaryId) => {
-                    test.strictEqual(electedPrimaryId, 'id1');
+                    assert.strictEqual(electedPrimaryId, 'id1');
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        }
-    },
+        });
+    });
 
-    testIsValidPrimary: {
-        setUp(callback) {
+    describe('is valid Primary tests', () => {
+        beforeEach(() => {
             instance1 = {
                 isPrimary: false,
                 hostname: 'hostname1',
@@ -1434,27 +1397,24 @@ module.exports = {
                     };
                 }
             };
+        });
 
-            callback();
-        },
-
-        testIsPrimary(test) {
+        it('is primary test', (done) => {
             provider.nodeProperties.instanceId = instanceId;
 
-            test.expect(1);
             provider.isValidPrimary(instanceId, instances)
                 .then((isValid) => {
-                    test.ok(isValid);
+                    assert.ok(isValid);
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testNoInstanceInfo(test) {
+        it('no instance info test', (done) => {
             provider.s3.getObject = function getObject() {
                 return {
                     promise() {
@@ -1463,22 +1423,21 @@ module.exports = {
                 };
             };
 
-            test.expect(1);
             provider.isValidPrimary(instanceId, instances)
                 .then((isValid) => {
-                    test.ok(isValid);
+                    assert.ok(isValid);
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        }
-    },
+        });
+    });
 
-    testPrimaryElected: {
-        setUp(callback) {
+    describe('Primary elected tests', () => {
+        beforeEach(() => {
             provider.nodeProperties = { instanceId };
             instanceProtectionParams = undefined;
 
@@ -1510,41 +1469,37 @@ module.exports = {
             provider.providerOptions = {
                 s3Bucket: 'foo'
             };
+        });
 
-            callback();
-        },
-
-        testInstanceProtectionSetWhenPrimary(test) {
-            test.expect(3);
+        it('instance protection set when primary test', (done) => {
             provider.primaryElected(instanceId)
                 .then(() => {
-                    test.strictEqual(instanceProtectionParams.InstanceIds.length, 1);
-                    test.strictEqual(instanceProtectionParams.InstanceIds[0], instanceId);
-                    test.ok(instanceProtectionParams.ProtectedFromScaleIn);
+                    assert.strictEqual(instanceProtectionParams.InstanceIds.length, 1);
+                    assert.strictEqual(instanceProtectionParams.InstanceIds[0], instanceId);
+                    assert.ok(instanceProtectionParams.ProtectedFromScaleIn);
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testInstanceProtectionNotSetWhenNotPrimary(test) {
-            test.expect(1);
+        it('instance protection not set when not primary test', (done) => {
             provider.primaryElected('foo')
                 .then(() => {
-                    test.strictEqual(instanceProtectionParams, undefined);
+                    assert.strictEqual(instanceProtectionParams, undefined);
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testOtherPrimariesSetToNonPrimary(test) {
+        it('other primaries set to non primary test', (done) => {
             let instancePut;
             let instancePutId;
 
@@ -1585,22 +1540,22 @@ module.exports = {
                 return q();
             };
 
-            test.expect(2);
             provider.primaryElected(instanceId)
                 .then(() => {
-                    test.strictEqual(instancePutId, '5678');
-                    test.strictEqual(instancePut.isPrimary, false);
+                    assert.strictEqual(instancePutId, '5678');
+                    assert.strictEqual(instancePut.isPrimary, false);
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        }
-    },
-    testTagPrimary: {
-        setUp(callback) {
+        });
+    });
+
+    describe('tag Primary tests', () => {
+        beforeEach(() => {
             provider.ec2 = {
                 describeTags(params) {
                     passedDescribeTagsParams = params;
@@ -1628,11 +1583,9 @@ module.exports = {
             };
 
             deleteTagRequests = [];
+        });
 
-            callback();
-        },
-
-        testTagPrimaryWithStackName(test) {
+        it('tag primary with stack name test', (done) => {
             describeTagsResults = {
                 Tags:
                     [{
@@ -1679,11 +1632,10 @@ module.exports = {
                 }
             ];
 
-            test.expect(4);
             provider.tagPrimaryInstance(primaryId, clusterInstances)
                 .then(() => {
-                    test.strictEqual(passedDescribeTagsParams.Filters[0].Values[0], primaryId);
-                    test.deepEqual(passedCreateTagsParams,
+                    assert.strictEqual(passedDescribeTagsParams.Filters[0].Values[0], primaryId);
+                    assert.deepEqual(passedCreateTagsParams,
                         {
                             Resources: ['1234'],
                             Tags: [
@@ -1693,18 +1645,18 @@ module.exports = {
                                 }
                             ]
                         });
-                    test.deepEqual(deleteTagRequests, expectedDeleteTagsRequest);
-                    test.strictEqual(deleteTagRequests.length, 2);
+                    assert.deepEqual(deleteTagRequests, expectedDeleteTagsRequest);
+                    assert.strictEqual(deleteTagRequests.length, 2);
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testTagPrimarySingleInstance(test) {
+        it('tag primary single instance test', (done) => {
             describeTagsResults = {
                 Tags:
                     [{
@@ -1724,22 +1676,21 @@ module.exports = {
 
             const primaryId = '1234';
 
-            test.expect(1);
             provider.tagPrimaryInstance(primaryId, clusterInstances)
                 .then(() => {
-                    test.strictEqual(deleteTagRequests.length, 0);
+                    assert.strictEqual(deleteTagRequests.length, 0);
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .finally(() => {
-                    test.done();
+                    done();
                 });
-        }
-    },
+        });
+    });
 
-    testSignalInstanceProvisioned: {
-        setUp(callback) {
+    describe('signal Instance Provisioned tests', () => {
+        beforeEach(() => {
             provider.ec2 = {
                 describeTags() {
                     const response = {
@@ -1777,15 +1728,12 @@ module.exports = {
                     cb(null, '');
                 }
             };
+        });
 
-            callback();
-        },
-
-        testSignalResourceCallSuccess(test) {
-            test.expect(1);
+        it('Signal Resource Call Success test', (done) => {
             provider.signalInstanceProvisioned('i-1234')
                 .then(() => {
-                    test.deepEqual(passedSignalResourceParams, {
+                    assert.deepEqual(passedSignalResourceParams, {
                         LogicalResourceId: 'BigIpAutoScaleGroup',
                         StackName: 'StackName',
                         Status: 'SUCCESS',
@@ -1793,23 +1741,22 @@ module.exports = {
                     });
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .done(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testSignalResourceNoInstance(test) {
+        it('Signal Resource no instance test', (done) => {
             provider.nodeProperties = {
                 instanceId: 'i-1234',
                 hostname: 'hostname'
             };
 
-            test.expect(1);
             provider.signalInstanceProvisioned()
                 .then(() => {
-                    test.deepEqual(passedSignalResourceParams, {
+                    assert.deepEqual(passedSignalResourceParams, {
                         LogicalResourceId: 'BigIpAutoScaleGroup',
                         StackName: 'StackName',
                         Status: 'SUCCESS',
@@ -1817,15 +1764,15 @@ module.exports = {
                     });
                 })
                 .catch((err) => {
-                    test.ok(false, err.message);
+                    assert.ok(false, err.message);
                 })
                 .done(() => {
-                    test.done();
+                    done();
                 });
-        },
+        });
 
-        testErrors: {
-            testSignalNoInstanceStackTag(test) {
+        describe('errors tests', () => {
+            it('Signal No Instance Stack Tag test', (done) => {
                 provider.ec2 = {
                     describeTags() {
                         const response = {
@@ -1844,20 +1791,19 @@ module.exports = {
                     }
                 };
 
-                test.expect(1);
                 provider.signalInstanceProvisioned('i-1234')
                     .then(() => {
-                        test.ok(false, 'signalInstanceProvisioned should have thrown');
+                        assert.ok(false, 'signalInstanceProvisioned should have thrown');
                     })
                     .catch((err) => {
-                        test.strictEqual(err.message, 'Cannot find stack-name for instance: i-1234');
+                        assert.strictEqual(err.message, 'Cannot find stack-name for instance: i-1234');
                     })
                     .done(() => {
-                        test.done();
+                        done();
                     });
-            },
+            });
 
-            testSignalNoInstanceTags(test) {
+            it('Signal No Instance Tags test', (done) => {
                 provider.ec2 = {
                     describeTags() {
                         return {
@@ -1870,18 +1816,17 @@ module.exports = {
 
                 const expectedError = 'Unable to get stack-name from instance. Unable to get instance tags';
 
-                test.expect(1);
                 provider.signalInstanceProvisioned('i-1234')
                     .then(() => {
-                        test.ok(false, 'signalInstanceProvisioned should have thrown');
+                        assert.ok(false, 'signalInstanceProvisioned should have thrown');
                     })
                     .catch((err) => {
-                        test.strictEqual(err.message, expectedError);
+                        assert.strictEqual(err.message, expectedError);
                     })
                     .done(() => {
-                        test.done();
+                        done();
                     });
-            }
-        }
-    }
-};
+            });
+        });
+    });
+});
