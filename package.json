@@ -1,6 +1,6 @@
 {
   "name": "@f5devcentral/f5-cloud-libs-aws",
-  "version": "2.9.0",
+  "version": "2.9.1",
   "description": "AWS implementation of f5-cloud-libs cloud provider code",
   "keywords": [
     "f5",
@@ -11,6 +11,11 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/F5Networks/f5-cloud-libs-aws.git"
+  },
+  "auditProcessor": {
+    "whitelist": [
+      "1523"
+    ]
   },
   "bugs": {
     "url": "https://github.com/F5Networks/f5-cloud-libs-aws/issues"
@@ -24,16 +29,27 @@
   "peerDependencies": {
     "@f5devcentral/f5-cloud-libs": "beta"
   },
+  "eslintConfig": {
+    "plugins": [
+      "mocha"
+    ],
+    "env": {
+      "mocha": true,
+      "node": true
+    }
+  },
   "devDependencies": {
     "eslint": "^4.19.1",
     "eslint-config-airbnb-base": "^12.1.0",
     "eslint-plugin-import": "^2.11.0",
-    "nodeunit": "^0.11.3"
+    "eslint-plugin-mocha": "^8.0.0",
+    "mocha": "^7.1.1"
   },
   "scripts": {
+    "audit": "npm audit --json > .auditReport.json; node scripts/auditProcessor.js",
     "lint": "node node_modules/eslint/bin/eslint lib",
     "package": "./package.sh",
-    "test": "node_modules/nodeunit/bin/nodeunit --reporter eclipse test test/lib",
+    "test": "mocha --exit test test/lib",
     "version": "./setVersion.sh $npm_package_version && git add ."
   }
 }
