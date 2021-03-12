@@ -177,7 +177,7 @@ describe('aws cloud provider tests', () => {
                 cb(null);
             };
         });
-        
+
         it('get Iid doc test', (done) => {
             iidDoc = {
                 privateIp: '1.2.3.4',
@@ -533,6 +533,41 @@ describe('aws cloud provider tests', () => {
 
         it('exists test', (done) => {
             provider.deleteStoredUcs('foo.ucs')
+                .then((response) => {
+                    assert.ok(true);
+                    assert.strictEqual(response.status, 'OK');
+                    assert.notStrictEqual(response.message
+                        .indexOf('The following items were successfully deleted'), -1);
+                })
+                .catch((err) => {
+                    assert.ok(false, err.message);
+                })
+                .finally(() => {
+                    done();
+                });
+        });
+    });
+
+    describe('delete stored object tests', () => {
+        beforeEach(() => {
+            provider.s3 = {
+                deleteObjects: function() {
+                    return {
+                        promise() {
+                            const deferred = q.defer();
+                            deferred.resolve();
+                            return deferred.promise;
+                        }
+                    };
+                }
+            };
+            provider.providerOptions = {
+                s3Bucket: 'foo'
+            };
+        });
+
+        it('exists test', (done) => {
+            provider.deleteStoredObject('credentials/primary')
                 .then((response) => {
                     assert.ok(true);
                     assert.strictEqual(response.status, 'OK');
