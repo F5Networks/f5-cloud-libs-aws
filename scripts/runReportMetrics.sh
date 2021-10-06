@@ -57,6 +57,8 @@ export PATH=$PATH:$EC2_HOME/bin
 export JAVA_HOME=/usr/java/openjdk/
 export PATH=$PATH:$JAVA_HOME/bin
 
+TOKEN=`curl -sS -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 120'`
+
 AWS_CLOUDWATCH_HOME=$(find /opt/aws -name "cloudwatch-*" -type d | sort --version-sort | tail -1)
 if [[ $? != 0 ]] || [[ -z $AWS_CLOUDWATCH_HOME ]]; then
     logger -p local0.error "$0 : Failed to locate AWS cloudwatch tools: $AWS_CLOUDWATCH_HOME"
@@ -151,7 +153,7 @@ function set_region() {
 
    techo [start]:set_region
 
-   local zone=$(curl -s -S http://169.254.169.254/latest/meta-data/placement/availability-zone/)
+   local zone=$(curl -s -S -H 'X-aws-ec2-metadata-token: '${TOKEN}'' http://169.254.169.254/latest/meta-data/placement/availability-zone/)
    #local zone=$(curl http://169.254.169.254/latest/meta-data/placement/availability-zone/)
    techo zone==$zone
    local region=$(echo $zone | sed -e "s:\([0-9][0-9]*\)[a-z]*\$:\\1:")
@@ -314,7 +316,7 @@ get_ve_auto_scale_group_name
 #get_stat_delta $1 $2
 set_region
 
-export inst_id=$(curl http://169.254.169.254/latest/meta-data/instance-id/ 2>/dev/null)
+export inst_id=$(curl -H 'X-aws-ec2-metadata-token: '${TOKEN}'' http://169.254.169.254/latest/meta-data/instance-id/ 2>/dev/null)
 techo instance_id $inst_id
 
 send_cpu_stat tmm-info tmm-stat
