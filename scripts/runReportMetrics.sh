@@ -153,7 +153,7 @@ function set_region() {
 
    techo [start]:set_region
 
-   local zone=$(curl -s -S -H 'X-aws-ec2-metadata-token: '${TOKEN}'' http://169.254.169.254/latest/meta-data/placement/availability-zone/)
+   local zone=$(curl -s -S -H "X-aws-ec2-metadata-token: ${TOKEN}" http://169.254.169.254/latest/meta-data/placement/availability-zone/)
    #local zone=$(curl http://169.254.169.254/latest/meta-data/placement/availability-zone/)
    techo zone==$zone
    local region=$(echo $zone | sed -e "s:\([0-9][0-9]*\)[a-z]*\$:\\1:")
