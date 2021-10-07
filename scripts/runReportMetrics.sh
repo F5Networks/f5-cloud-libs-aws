@@ -316,7 +316,7 @@ get_ve_auto_scale_group_name
 #get_stat_delta $1 $2
 set_region
 
-export inst_id=$(curl -H 'X-aws-ec2-metadata-token: '${TOKEN}'' http://169.254.169.254/latest/meta-data/instance-id/ 2>/dev/null)
+export inst_id=$(curl -H "X-aws-ec2-metadata-token: ${TOKEN}" http://169.254.169.254/latest/meta-data/instance-id/ 2>/dev/null)
 techo instance_id $inst_id
 
 send_cpu_stat tmm-info tmm-stat
