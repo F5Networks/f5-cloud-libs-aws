@@ -1,6 +1,6 @@
 {
   "name": "@f5devcentral/f5-cloud-libs-aws",
-  "version": "2.10.0",
+  "version": "2.10.1",
   "description": "AWS implementation of f5-cloud-libs cloud provider code",
   "keywords": [
     "f5",
@@ -20,7 +20,8 @@
   },
   "license": "Apache-2.0",
   "resolutions": {
-    "lodash": "4.17.21"
+    "lodash": "4.17.21",
+    "path-parse": "1.0.7"
   },
   "dependencies": {
     "aws-sdk": "^2.906.0",
@@ -50,7 +51,7 @@
     "audit": "npm audit --json > .auditReport.json; node scripts/auditProcessor.js",
     "lint": "node node_modules/eslint/bin/eslint lib",
     "package": "./package.sh",
-    "preinstall": "npx npm-force-resolutions",
+    "preinstall": "if [ -f ./package-lock.json ]; then npx npm-force-resolutions; fi",
     "test": "mocha --exit test test/lib",
     "version": "./setVersion.sh $npm_package_version && git add ."
   }
